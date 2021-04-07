@@ -4,6 +4,7 @@
 #include <complex>
 #include <map>
 #include <omp.h>
+#include <list>
 #include <tuple>
 #include <thread>
 #include <unordered_map>

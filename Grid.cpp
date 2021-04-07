@@ -5,22 +5,11 @@ Grid::Grid(const ThreeSequenceData& data, const std::list<Transformer2>& transfo
 {
 	omp_set_num_threads(std::thread::hardware_concurrency());
 
-	/*
-	std::vector<std::function<void()>> RawLineWithoutGeneratorAndTransformer;
-	RawLineWithoutGeneratorAndTransformer.reserve(3);
-	RawLineWithoutGeneratorAndTransformer.emplace_back([this, &Z1_data_sheet]()->void { this->Y1 = Grid::getAdmittanceMatrixBySheet(Z1_data_sheet); });
-	RawLineWithoutGeneratorAndTransformer.emplace_back([this, &Z2_data_sheet]()->void { this->Y2 = Grid::getAdmittanceMatrixBySheet(Z2_data_sheet); });
-	RawLineWithoutGeneratorAndTransformer.emplace_back([this, &Z0_data_sheet]()->void { this->Y0 = Grid::getAdmittanceMatrixBySheet(Z0_data_sheet); });
-
-	for (const auto& iter : RawLineWithoutGeneratorAndTransformer)
-		this->myPool.enqueue(iter);
-	*/
-
 	this->NodesNum = std::max(data.lineData1.col(0).maxCoeff(), data.lineData1.col(1).maxCoeff());
 
-	this->Y1 = this->getAdmittanceMatrixBySheet(data.lineData1, this->SocketData1);
-	this->Y2 = this->getAdmittanceMatrixBySheet(data.lineData2, this->SocketData2);
-	this->Y0 = this->getAdmittanceMatrixBySheet(data.lineData0, this->SocketData0);
+	this->Y1 = this->setYxFromSheet(data.lineData1, this->SocketData1);
+	this->Y2 = this->setYxFromSheet(data.lineData2, this->SocketData2);
+	this->Y0 = this->setYxFromSheet(data.lineData0, this->SocketData0);
 
 	this->adjustTransformerRatio(transformList);
 
@@ -34,7 +23,7 @@ Grid::~Grid()
 }
 
 //通过数据集获得导纳矩阵
-Eigen::MatrixXcf Grid::getAdmittanceMatrixBySheet(const Eigen::MatrixXf& line_data_sheet, std::map<std::pair<size_t, size_t>, std::pair<cf, cf>>& socketData)
+Eigen::MatrixXcf Grid::setYxFromSheet(const Eigen::MatrixXf& line_data_sheet, std::map<std::pair<size_t, size_t>, std::pair<cf, cf>>& socketData)
 {
 	//dataSheet: https://img-blog.csdn.net/20180616204918263?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzMyNDEyNzU5/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70
 	//但是没有上面变压器变比那一列，因为大部分线路的变比都是1
@@ -55,12 +44,6 @@ Eigen::MatrixXcf Grid::getAdmittanceMatrixBySheet(const Eigen::MatrixXf& line_da
 	for (decltype(branchNum) i = 0; i < branchNum; i++)
 	{
 		const size_t from = inNode(i) - 1, to = outNode(i) - 1;
-		/*
-		Y(from, to) -= y(i) / K(i);
-		Y(to, from) = Y(from, to);
-		Y(from, from) += y(i) + (B(i) / cf{2, 0});
-		Y(to, to) += y(i) / (K(i) * K(i)) + (B(i) / cf{2, 0});
-		*/
 
 		Y(from, to) -= y(i);
 		Y(to, from) = Y(from, to);
@@ -74,60 +57,6 @@ Eigen::MatrixXcf Grid::getAdmittanceMatrixBySheet(const Eigen::MatrixXf& line_da
 
 	return Y;
 }
-/*
-//通过阻抗矩阵Zdx获得导纳矩阵
-Eigen::MatrixXcf Grid::getAdmittanceMatrixFromReactanceMatrix(const Eigen::MatrixXcf& Zdx)
-{
-	//dataSheet: https://blog.csdn.net/qq_32412759/article/details/80715617
-	Eigen::VectorXi inNode = Zdx.col(0).real().cast<int>().array();
-	Eigen::VectorXi outNode = Zdx.col(1).real().cast<int>().array();
-	Eigen::MatrixXcf yd = Eigen::VectorXcf(inNode.size()).setOnes().array() / Zdx.col(2).array();
-	auto busNum = std::max(inNode.maxCoeff(), outNode.maxCoeff());
-	Eigen::MatrixXcf Y = Eigen::MatrixXcf::Zero(busNum, busNum);
-
-	//这里采用map，因为当pair作为unordered_map的key时，需要hash函数，而map不需要
-	std::map<std::pair<int, int>, cf> socket_yd{};
-	std::unordered_map<int, std::unordered_set<int>> DirectConnectNodePair{};
-
-#pragma omp parallel for
-	for (decltype(inNode.size()) i = 0; i < inNode.size(); i++)
-	{
-		//其实可以省一半空间的，用空间换时间吧，反正也是对称矩阵嘛
-		socket_yd.insert({ {inNode(i), outNode(i)}, yd(i) });
-		socket_yd.insert({ {outNode(i), inNode(i)}, yd(i) });
-		DirectConnectNodePair[inNode(i)].insert(outNode(i));
-		DirectConnectNodePair[outNode(i)].insert(inNode(i));
-	}
-
-#pragma omp parallel for
-	for (decltype(busNum) i = 0; i < busNum; i++)
-	{
-		for (decltype(i) j = 0; j < i; j++)
-		{
-			auto iter = socket_yd.find({ i + 1, j + 1 });
-			if (iter != socket_yd.end())
-			{
-				//TODO:这里到底是加还是减
-				//Y(i, j) += iter->second;
-				Y(i, j) -= iter->second;
-				Y(j, i) = Y(i, j);
-			}
-		}
-	}
-
-#pragma omp parallel for
-	for (decltype(busNum) i = 0; i < busNum; i++)
-	{
-		auto iter = DirectConnectNodePair.find(i + 1);
-		for (const auto& hashSetIter : iter->second)
-		{
-			auto MapIter = socket_yd.find({ i + 1, hashSetIter });
-			Y(i, i) += MapIter->second;
-		}
-	}
-	return Y;
-}
-*/
 
 //TODO:对称短路计算
 void Grid::SymmetricShortCircuit(const Eigen::MatrixXcf& AdmittanceMatrix, const size_t shortPoint, const float Sb, const float Uav)
@@ -217,13 +146,14 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
 		Uabc.row(i) = (St * ((Eigen::MatrixXcf(3, 1) << U1(i), U2(i), U0(i)).finished())).cwiseAbs();
 	}
 
-	for (size_t i = 0; i < branchNum; i++)
+	for (decltype(branchNum) i = 0; i < branchNum; i++)
+        //fprintf(stdout, "节点%ld的abc相短路电压: %f\n", i + 1, Uabc.row(i));
 		std::cout << "节点" << i + 1 << "的abc相短路电压: " << Uabc.row(i) << std::endl;
 
 	std::map < std::pair<int, int>, std::tuple<cf, cf, cf>> Isx;
 
 #pragma omp parallel for
-	for (size_t i = 0; i < branchNum; i++) {
+	for (decltype(branchNum) i = 0; i < branchNum; i++) {
 		for (decltype(i) j = 1; j < i; j++) {
 			std::pair<int, int> curSocket = std::make_pair(i, j);
 			cf Is1{ 0,0 }, Is2{ 0,0 }, Is0{ 0,0 };
@@ -234,7 +164,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
 		}
 	}
 
-	for (const auto& iter : Isx) {
+	for (const auto &iter : Isx) {
 		auto& thisTuple = iter.second;
 		Eigen::MatrixXcf I = St * ((Eigen::MatrixXcf(3, 1) << std::get<0>(thisTuple), std::get<1>(thisTuple), std::get<2>(thisTuple)).finished());
 		std::cout << "节点" << iter.first.first << "与节点" << iter.first.second << "间的abc相短路电流: " << std::endl;
@@ -245,32 +175,40 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
 
 void Grid::adjustTransformerRatio(const std::list<Transformer2>& transList)
 {
+    //这里不应该有omp，因为这里是自动类型推到的迭代器，没有重载运算符
+	for (const auto &transformer : transList) {
+		const auto primaryNode = transformer.getPrimaryNode() - 1;
+		const auto secondNode = transformer.getSecondaryNode() - 1;
+		const auto k = transformer.getRatio();
 
-#pragma omp parallel for
-	for (const auto& transformer : transList) {
-		const auto primaryNode = transformer.getPrimaryNode();
-		const auto secondNode = transformer.getSecondaryNode();
+		const auto y1 = this->SocketData1.find({ transformer.getPrimaryNode(), transformer.getSecondaryNode() })->second.first;
+		const auto y2 = this->SocketData2.find({ transformer.getPrimaryNode(), transformer.getSecondaryNode() })->second.first;
+		const auto y0 = this->SocketData0.find({ transformer.getPrimaryNode(), transformer.getSecondaryNode() })->second.first;
 
-		const auto y = this->SocketData1.find({ primaryNode ,secondNode })->second.first;
+		const cf delta_Y1_tt = y1 / (k * k) - y1;
+		const cf delta_Y1_ft = y1 - y1 / k;
 
-		const cf delta_Y_tt = (1 / (transformer.getRatio() * transformer.getRatio()) - 1) * y;
-		const cf delta_Y_ft = y * (1 - 1 / transformer.getRatio());
+		const cf delta_Y2_tt = y2 / (k * k) - y2;
+		const cf delta_Y2_ft = y2 - y2 / k;
 
-		this->Y1(secondNode, secondNode) += delta_Y_tt;
-		this->Y1(primaryNode, secondNode) += delta_Y_ft;
+		const cf delta_Y0_tt = y0 / (k * k) - y0;
+		const cf delta_Y0_ft = y0 - y0 / k;
+
+		this->Y1(secondNode, secondNode) += delta_Y1_tt;
+		this->Y1(primaryNode, secondNode) += delta_Y1_ft;
 		this->Y1(secondNode, primaryNode) = this->Y1(primaryNode, secondNode);
 
-		this->Y2(secondNode, secondNode) += delta_Y_tt;
-		this->Y2(primaryNode, secondNode) += delta_Y_ft;
+		this->Y2(secondNode, secondNode) += delta_Y2_tt;
+		this->Y2(primaryNode, secondNode) += delta_Y2_ft;
 		this->Y2(secondNode, primaryNode) = this->Y2(primaryNode, secondNode);
 
-		this->Y0(secondNode, secondNode) += delta_Y_tt;
-		this->Y0(primaryNode, secondNode) += delta_Y_ft;
+		this->Y0(secondNode, secondNode) += delta_Y0_tt;
+		this->Y0(primaryNode, secondNode) += delta_Y0_ft;
 		this->Y0(secondNode, primaryNode) = this->Y0(primaryNode, secondNode);
 	}
 }
 
-Eigen::MatrixXcf Grid::getAdmittanceMatrix(const SEQUENCE whichSeq){
+Eigen::MatrixXcf Grid::getYx(const SEQUENCE whichSeq){
 	switch (whichSeq)
 	{
 	case SEQUENCE::POSITIVE:
