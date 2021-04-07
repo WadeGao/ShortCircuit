@@ -1,15 +1,41 @@
 #include "Grid.h"
 #include <iostream>
 
+Grid::Grid(const Eigen::MatrixXf& Z1_data_sheet, const Eigen::MatrixXf& Z2_data_sheet, const Eigen::MatrixXf& Z0_data_sheet) : myPool(maxThreadsNum)
+{
+	omp_set_num_threads(std::thread::hardware_concurrency());
+
+	std::vector<std::function<void()>> Y_Z_interConvert;
+	Y_Z_interConvert.reserve(3);
+
+	this->Y1 = Grid::getAdmittanceMatrixBySheet(Z1_data_sheet);
+    this->Y2 = Grid::getAdmittanceMatrixBySheet(Z2_data_sheet);
+    this->Y0 = Grid::getAdmittanceMatrixBySheet(Z0_data_sheet);
+
+	Y_Z_interConvert.emplace_back([this]()->void { this->Y1 = Grid::getAdmittanceMatrixBySheet(Z1_data_sheet); });
+	Y_Z_interConvert.emplace_back([this]()->void { this->Y2 = Grid::getAdmittanceMatrixBySheet(Z2_data_sheet); });
+	Y_Z_interConvert.emplace_back([this]()->void { this->Y0 = Grid::getAdmittanceMatrixBySheet(Z0_data_sheet); });
+
+	for (const auto& iter : Y_Z_interConvert)
+		this->myPool.enqueue(iter);
+
+}
+
+Grid::~Grid()
+{
+}
+
 //通过数据集获得导纳矩阵
 Eigen::MatrixXcf Grid::getAdmittanceMatrixBySheet(const Eigen::MatrixXf& line_data_sheet)
 {
 	//dataSheet: https://img-blog.csdn.net/20180616204918263?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzMyNDEyNzU5/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70
+	//但是没有上面变压器变比那一列，因为大部分线路的变比都是1
+
 	const Eigen::VectorXi inNode = line_data_sheet.col(0).cast<int>().array();
 	const Eigen::VectorXi outNode = line_data_sheet.col(1).cast<int>().array();
 	const Eigen::VectorXcf Z = line_data_sheet.col(2) + Imaginer * line_data_sheet.col(3);
 	const Eigen::VectorXcf B = line_data_sheet.col(4) * Imaginer;
-	const Eigen::VectorXf K = line_data_sheet.col(5);
+	//const Eigen::VectorXf K = line_data_sheet.col(5);
 
 	auto branchNum = inNode.size();
 	auto busNum = std::max(inNode.maxCoeff(), outNode.maxCoeff());
@@ -21,16 +47,15 @@ Eigen::MatrixXcf Grid::getAdmittanceMatrixBySheet(const Eigen::MatrixXf& line_da
 #pragma omp parallel for
 	for (decltype(branchNum) i = 0; i < branchNum; i++)
 	{
-		auto from = inNode(i) - 1, to = outNode(i) - 1;
-		//Y(from, to) -= K(i) * y(i);
-		//Y(to, from) = Y(from, to);
-		//Y(from, from) += K(i) * K(i) * y(i) + Imaginer * B(i);
-		//Y(to, to) += y(i) + Imaginer * B(i);
-
-		Y(from, to) -= y(i) / K(i);
+		const auto from = inNode(i) - 1, to = outNode(i) - 1;
+		/*Y(from, to) -= y(i) / K(i);
 		Y(to, from) = Y(from, to);
-		Y(to, to) += y(i) / (K(i) * K(i)) + (B(i) / std::complex<float>{2, 0});
 		Y(from, from) += y(i) + (B(i) / std::complex<float>{2, 0});
+		Y(to, to) += y(i) / (K(i) * K(i)) + (B(i) / std::complex<float>{2, 0});*/
+		Y(from, to) -= y(i);
+		Y(to, from) = Y(from, to);
+		Y(from, from) += y(i) + (B(i) / std::complex<float>{2, 0});
+		Y(to, to) += y(i) + (B(i) / std::complex<float>{2, 0});
 	}
 	return Y;
 }
@@ -50,7 +75,7 @@ Eigen::MatrixXcf Grid::getAdmittanceMatrixFromReactanceMatrix(const Eigen::Matri
 	std::unordered_map<int, std::unordered_set<int>> DirectConnectNodePair{};
 
 #pragma omp parallel for
-	for (size_t i = 0; i < inNode.size(); i++)
+	for (decltype(inNode.size()) i = 0; i < inNode.size(); i++)
 	{
 		//其实可以省一半空间的，用空间换时间吧，反正也是对称矩阵嘛
 		socket_yd.insert({ {inNode(i), outNode(i)}, yd(i) });
@@ -186,7 +211,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
 		for (decltype(i) j = 1; j < i; j++) {
 			std::pair<int, int> curSocket = std::make_pair(i, j);
 			std::complex<float> Is1{ 0,0 }, Is2{ 0,0 }, Is0{ 0,0 };
-			if (abs(this->Y1(i, j)) > epsilon)	Is1 = -(U1(i) - U1(j)) * this->Y1(i, j);
+			if (abs(this->Y1(i, j)) > epsilon)  Is1 = -(U1(i) - U1(j)) * this->Y1(i, j);
 			if (abs(this->Y2(i, j)) > epsilon)	Is2 = -(U2(i) - U2(j)) * this->Y2(i, j);
 			if (abs(this->Y0(i, j)) > epsilon)	Is0 = -(U0(i) - U0(j)) * this->Y0(i, j);
 			Isx.insert({ curSocket,{Is1,Is2,Is0} });
@@ -202,23 +227,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
 
 }
 
-Grid::Grid(const Eigen::MatrixXcf& Y1_, const Eigen::MatrixXcf& Y2_, const Eigen::MatrixXcf& Y0_) : myPool(maxThreadsNum), Y1(Y1_), Y2(Y2_), Y0(Y0_)
+void Grid::adjustTransformerRatio(const size_t PrimaryWindingNode, const size_t SecondaryWindingNode, const float newRatio, const std::complex<float> &z)
 {
-	omp_set_num_threads(std::thread::hardware_concurrency());
-	std::vector<std::function<void()>> Y_Z_interConvert;
-	Y_Z_interConvert.reserve(3);
-
-	Y_Z_interConvert.emplace_back([this]()->void { this->Z1 = this->Y1.inverse(); });
-	Y_Z_interConvert.emplace_back([this]()->void { this->Z2 = this->Y2.inverse(); });
-	Y_Z_interConvert.emplace_back([this]()->void { this->Z0 = this->Y0.inverse(); });
-
-	for (const auto& iter : Y_Z_interConvert)
-		this->myPool.enqueue(iter);
-
+    constexpr auto delta_Y_tt =
 }
-
-Grid::~Grid()
-{
-}
-
-

@@ -11,7 +11,7 @@
 #include <unordered_set>
 #include <utility>
 
-constexpr auto M_PI = 3.14159265358979323846;
+//constexpr auto M_PI = 3.14159265358979323846;
 constexpr auto epsilon = 1e-6;
 const auto Imaginer = std::complex<float>{ 0, 1 };
 const std::complex<float> alpha = { cosf(M_PI * 2 / 3), sinf(M_PI * 2 / 3) };
