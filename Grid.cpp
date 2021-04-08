@@ -22,11 +22,11 @@ Grid::~Grid()
 {
 }
 
-//Í¨¹ıÊı¾İ¼¯»ñµÃµ¼ÄÉ¾ØÕó
-Eigen::MatrixXcf Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, std::map<std::pair<size_t, size_t>, std::pair<cf, cf>> &socketData)
+//é€šè¿‡æ•°æ®é›†è·å¾—å¯¼çº³çŸ©é˜µ
+Eigen::MatrixXcf Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, std::map<std::pair<NodeType, NodeType>, std::pair<cf, cf>> &socketData)
 {
     //dataSheet: https://img-blog.csdn.net/20180616204918263?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzMyNDEyNzU5/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70
-    //µ«ÊÇÃ»ÓĞÉÏÃæ±äÑ¹Æ÷±ä±ÈÄÇÒ»ÁĞ£¬ÒòÎª´ó²¿·ÖÏßÂ·µÄ±ä±È¶¼ÊÇ1
+    //ä½†æ˜¯æ²¡æœ‰ä¸Šé¢å˜å‹å™¨å˜æ¯”é‚£ä¸€åˆ—ï¼Œå› ä¸ºå¤§éƒ¨åˆ†çº¿è·¯çš„å˜æ¯”éƒ½æ˜¯1
 
     const Eigen::VectorXi inNode = line_data_sheet.col(0).cast<int>().array();
     const Eigen::VectorXi outNode = line_data_sheet.col(1).cast<int>().array();
@@ -41,33 +41,36 @@ Eigen::MatrixXcf Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, st
 
 
 //#pragma omp parallel for
-//¶à¸öÏß³Ì¶ÔÍ¬Ò»¸öÈİÆ÷Í¬Ê±Ğ´£¬Ïß³Ì²»°²È«
+//å¤šä¸ªçº¿ç¨‹å¯¹åŒä¸€ä¸ªå®¹å™¨åŒæ—¶å†™ï¼Œçº¿ç¨‹ä¸å®‰å…¨
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
-        const size_t from = inNode(i) - 1, to = outNode(i) - 1;
+        const NodeType from = inNode(i) - 1, to = outNode(i) - 1;
 
         Y(from, to) -= y(i);
         Y(to, from) = Y(from, to);
         Y(from, from) += y(i) + (B(i) / cf{ 2, 0 });
         Y(to, to) += y(i) + (B(i) / cf{ 2, 0 });
 
-        const auto line_data = std::make_pair(y(i), B(i));
-        socketData.insert({ {inNode(i), outNode(i)}, line_data });
-        socketData.insert({ {outNode(i), inNode(i)}, line_data });
+        const auto line_data_y_B = std::make_pair(y(i), B(i));
+        socketData.insert(
+        {
+            { {inNode(i), outNode(i)}, line_data_y_B },
+            { {outNode(i), inNode(i)}, line_data_y_B }
+        } );
     }
 
     return Y;
 }
 
-//TODO:¶Ô³Æ¶ÌÂ·¼ÆËã
-void Grid::SymmetricShortCircuit(const Eigen::MatrixXcf& AdmittanceMatrix, const size_t shortPoint, const float Sb, const float Uav)
+//TODO:å¯¹ç§°çŸ­è·¯è®¡ç®—
+void Grid::SymmetricShortCircuit(const Eigen::MatrixXcf& AdmittanceMatrix, const NodeType shortPoint, const DeviceArgType Sb, const DeviceArgType Uav)
 {
     const auto busNum = AdmittanceMatrix.rows();
     Eigen::VectorXf Is = Eigen::VectorXf::Zero(busNum, 1);
 }
 
-//µ¥Ïà¶ÌÂ·¼ÆËã
-void Grid::lgShortCircuit(const size_t faultNode, const cf& Zf)
+//å•ç›¸çŸ­è·¯è®¡ç®—
+void Grid::lgShortCircuit(const NodeType faultNode, const cf& Zf)
 {
     const auto faultNode2 = faultNode, faultNode0 = faultNode;
 
@@ -78,18 +81,18 @@ void Grid::lgShortCircuit(const size_t faultNode, const cf& Zf)
     If << Ifa1, Ifa1, Ifa1;
     const Eigen::VectorXcf If_abc = St * If;
 
-    fprintf(stdout, "¹ÊÕÏµãabcÏà¶ÌÂ·µçÁ÷: \n");
+    fprintf(stdout, "æ•…éšœç‚¹abcç›¸çŸ­è·¯ç”µæµ: \n");
     for (decltype(If_abc.size()) i = 0; i < If_abc.size(); i++)
         fprintf(stdout, "%f\n", abs(If_abc(i)));
 
     const auto Is = If_abc(0);
-    std::cout << "¹ÊÕÏµçÁ÷: " << Is << std::endl;
+    std::cout << "æ•…éšœç”µæµ: " << Is << std::endl;
 
     this->getBusVoltageAndCurrent(If, faultNode);
 }
 
-//Á½Ïà¶ÌÂ·¼ÆËã
-void Grid::llShortCircuit(const size_t faultNode, const cf& Zf)
+//ä¸¤ç›¸çŸ­è·¯è®¡ç®—
+void Grid::llShortCircuit(const NodeType faultNode, const cf& Zf)
 {
     const auto faultNode2 = faultNode;
 
@@ -99,18 +102,18 @@ void Grid::llShortCircuit(const size_t faultNode, const cf& Zf)
     If << Ifa1, Ifa2, Ifa0;
     const Eigen::VectorXcf If_abc = St * If;
 
-    fprintf(stdout, "¹ÊÕÏµãabcÏà¶ÌÂ·µçÁ÷: \n");
+    fprintf(stdout, "æ•…éšœç‚¹abcç›¸çŸ­è·¯ç”µæµ: \n");
     for (decltype(If_abc.size()) i = 0; i < If_abc.size(); i++)
         fprintf(stdout, "%f\n", abs(If_abc(i)));
 
     const auto Is = If_abc(2);
-    std::cout << "¹ÊÕÏµçÁ÷: " << Is << std::endl;
+    std::cout << "æ•…éšœç”µæµ: " << Is << std::endl;
 
     this->getBusVoltageAndCurrent(If, faultNode);
 }
 
-//Á½Ïà¶ÔµØ¶ÌÂ·¼ÆËã
-void Grid::llgShortCircuit(const size_t faultNode, const cf& Zf)
+//ä¸¤ç›¸å¯¹åœ°çŸ­è·¯è®¡ç®—
+void Grid::llgShortCircuit(const NodeType faultNode, const cf& Zf)
 {
     const auto faultNode2 = faultNode, faultNode0 = faultNode;
 
@@ -122,17 +125,17 @@ void Grid::llgShortCircuit(const size_t faultNode, const cf& Zf)
     If << Ifa1, Ifa2, Ifa0;
     const Eigen::VectorXcf If_abc = St * If;
 
-    fprintf(stdout, "¹ÊÕÏµãabcÏà¶ÌÂ·µçÁ÷: \n");
+    fprintf(stdout, "æ•…éšœç‚¹abcç›¸çŸ­è·¯ç”µæµ: \n");
     for (int i = 0; i < If_abc.size(); i++)
         fprintf(stdout, "%f\n", abs(If_abc(i)));
 
     const auto Is = If_abc(1) + If_abc(2);
-    std::cout << "¹ÊÕÏµçÁ÷: " << Is << std::endl;
+    std::cout << "æ•…éšœç”µæµ: " << Is << std::endl;
 
     this->getBusVoltageAndCurrent(If, faultNode);
 }
 
-void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faultNode)
+void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const NodeType faultNode)
 {
     auto branchNum = this->Y1.rows();
     Eigen::MatrixXcf U1 = Eigen::MatrixXcf(branchNum, 1);
@@ -149,7 +152,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
     }
 
     for (decltype(branchNum) i = 0; i < branchNum; i++)
-        std::cout << "½Úµã" << i + 1 << "µÄabcÏà¶ÌÂ·µçÑ¹: " << Uabc.row(i) << std::endl;
+        std::cout << "èŠ‚ç‚¹" << i + 1 << "çš„abcç›¸çŸ­è·¯ç”µå‹: " << Uabc.row(i) << std::endl;
 
     std::map < std::pair<int, int>, std::tuple<cf, cf, cf>> Isx;
 
@@ -171,7 +174,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const size_t faul
     {
         const auto& thisTuple = iter.second;
         Eigen::MatrixXcf I = St * ((Eigen::MatrixXcf(3, 1) << std::get<0>(thisTuple), std::get<1>(thisTuple), std::get<2>(thisTuple)).finished());
-        std::cout << "½Úµã" << iter.first.first << "Óë½Úµã" << iter.first.second << "¼äµÄabcÏà¶ÌÂ·µçÁ÷: " << std::endl;
+        std::cout << "èŠ‚ç‚¹" << iter.first.first << "ä¸èŠ‚ç‚¹" << iter.first.second << "é—´çš„abcç›¸çŸ­è·¯ç”µæµ: " << std::endl;
         std::cout << I << std::endl;
     }
 }
@@ -190,14 +193,14 @@ void Grid::adjustTransformerRatio(const std::vector<Transformer2>& transList)
         const auto &y2 = this->SocketData2.find({ transformer.getPrimaryNode(), transformer.getSecondaryNode() })->second.first;
         const auto &y0 = this->SocketData0.find({ transformer.getPrimaryNode(), transformer.getSecondaryNode() })->second.first;
 
-        const cf delta_Y1_tt = y1 / (k * k) - y1;
-        const cf delta_Y1_ft = y1 - y1 / k;
+        const auto delta_Y1_tt = y1 / (k * k) - y1;
+        const auto delta_Y1_ft = y1 - y1 / k;
 
-        const cf delta_Y2_tt = y2 / (k * k) - y2;
-        const cf delta_Y2_ft = y2 - y2 / k;
+        const auto delta_Y2_tt = y2 / (k * k) - y2;
+        const auto delta_Y2_ft = y2 - y2 / k;
 
-        const cf delta_Y0_tt = y0 / (k * k) - y0;
-        const cf delta_Y0_ft = y0 - y0 / k;
+        const auto delta_Y0_tt = y0 / (k * k) - y0;
+        const auto delta_Y0_ft = y0 - y0 / k;
 
         this->Y1(secondNode, secondNode) += delta_Y1_tt;
         this->Y1(primaryNode, secondNode) += delta_Y1_ft;
