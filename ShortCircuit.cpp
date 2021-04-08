@@ -1,4 +1,5 @@
 ﻿#define EIGEN_USE_MKL_ALL
+
 #include <iostream>
 #include "Common.h"
 #include "Grid.h"

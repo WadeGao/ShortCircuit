@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+
 class Transformer2
 {
 private:
