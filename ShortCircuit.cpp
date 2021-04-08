@@ -16,7 +16,7 @@ int main()
         4,  3,  0.018, 0.050, 0.026,  1.00,
         5,  4,  0.000, 0.184, 0.000,  0.96;
 
-    Grid my_grid({ mat, mat, mat }, { {5,4,0.96},{1,2,1.05} });
+    Grid my_grid({ mat, mat, mat }, { {5,4,0.96,    120,10.5,120},{1,2,1.05,     60,10.5,120} });
 
     std::cout << my_grid.getYx(SEQUENCE::POSITIVE) << std::endl;
     return 0;
