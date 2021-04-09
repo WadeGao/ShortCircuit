@@ -1,7 +1,16 @@
+/*
+ * @Author: your name
+ * @Date: 2021-04-08 19:08:26
+ * @LastEditTime: 2021-04-09 13:08:21
+ * @LastEditors: Please set LastEditors
+ * @Description: In User Settings Edit
+ * @FilePath: /VSCode/Grid.h
+ */
 #pragma once
 #include "Common.h"
-#include "Transformer.h"
 #include "ThreadPool.hpp"
+#include "Generator.h"
+#include "Transformer.h"
 
 enum class SEQUENCE
 {
@@ -18,35 +27,39 @@ private:
     Eigen::MatrixXcf Y1, Y2, Y0;
     //socket->{Y, B}
     std::map<std::pair<NodeType, NodeType>, std::pair<cf, cf>> SocketData1{}, SocketData2{}, SocketData0{};
-    NodeType NodesNum{ 0 };
+    NodeType NodeNum{0};
 
-    //通过数据集获得线路原始导纳矩阵
-    Eigen::MatrixXcf setYxFromSheet(const Eigen::MatrixXf& line_data_sheet, std::map<std::pair<NodeType, NodeType>, std::pair<cf, cf>>& socketData);
+    //?????????????路?????????
+    void setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixXcf &Y, std::map<std::pair<NodeType, NodeType>, std::pair<cf, cf>> &socketData);
 
-    //调整变压器变比，同时对节点导纳矩阵作出修改
-    void adjustTransformerRatio(const std::vector<Transformer2> &transList);
+    //???????????????????????????????
+    void adjustIdealTransformer2_PrimarySideReactanceRatio(const std::vector<Transformer2> &transList);
 
-    //对称短路计算
-    void SymmetricShortCircuit(const Eigen::MatrixXcf& AdmittanceMatrix, const NodeType shortPoint, const DeviceArgType Sb, const DeviceArgType Uav);
+    void mountTransformer2(const std::vector<Transformer2> &transList);
+    void mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pair<IdealTransformer2, cf>> &idealTransList);
+    void mountGenerator(const std::vector<Generator> &geneList);
 
-    //单相短路计算
-    void lgShortCircuit(const NodeType faultNode, const cf& Zf);
+    //????路????
+    void
+    SymmetricShortCircuit(const Eigen::MatrixXcf &AdmittanceMatrix, const NodeType shortPoint, const DeviceArgType Sb, const DeviceArgType Uav);
 
-    //两相短路计算
-    void llShortCircuit(const NodeType faultNode, const cf& Zf);
+    //?????路????
+    void lgShortCircuit(const NodeType faultNode, const cf &Zf);
 
-    //两相对地短路计算
-    void llgShortCircuit(const NodeType faultNode, const cf& Zf);
+    //?????路????
+    void llShortCircuit(const NodeType faultNode, const cf &Zf);
 
-    //非对称短路时计算线路电压电流
-    void getBusVoltageAndCurrent(const Eigen::VectorXcf& If, const NodeType faultNode);
+    //???????路????
+    void llgShortCircuit(const NodeType faultNode, const cf &Zf);
+
+    //?????路???????路???????
+    void getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType faultNode);
 
 public:
-    Grid(const ThreeSequenceData& data, const std::vector<Transformer2> &transformList);
+    Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList);
     ~Grid();
 
-    //getter方法
+    //getter????
     Eigen::MatrixXcf getYx(const SEQUENCE whichSeq) const;
     Eigen::MatrixXcf getZx(const SEQUENCE whichSeq) const;
 };
-
