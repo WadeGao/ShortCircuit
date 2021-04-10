@@ -78,7 +78,6 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
     std::list<std::pair<socketType, cf>> shortCurrent{};
 
     //TODO:这里把变压器当成了k=1的变压器，或者说根本没有变压器
-    //TODO: just write a algorithm to solve Ipq. But Ipq is a n * n Matrix :-(
     const auto &sockData = this->SocketData1;
     for (const auto &iter : sockData)
     {

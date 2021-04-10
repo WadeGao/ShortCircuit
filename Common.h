@@ -32,5 +32,3 @@ using ThreeSequenceData = struct ThreeSequenceData
     Eigen::MatrixXf lineData2;
     Eigen::MatrixXf lineData0;
 };
-
-using socketType = std::pair<NodeType, NodeType>;
