@@ -59,8 +59,9 @@ void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixX
 
         const auto line_data_y_B = std::make_pair(y(i), B(i));
         socketData.insert(
-            {{{inNode(i), outNode(i)}, line_data_y_B},
-             {{outNode(i), inNode(i)}, line_data_y_B}});
+        {
+            {{inNode(i), outNode(i)}, line_data_y_B},
+            {{outNode(i), inNode(i)}, line_data_y_B}});
     }
 }
 
@@ -73,7 +74,7 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
     Ui = Ui.array() - Z.array() * If;
     Ui(shortPoint - 1) = cf{0.0f, 0.0f};
 
-    std::unordered_set<NodeType> pqNodeSum{};
+    std::set<socketType> pqNodeSum{};
     std::list<std::pair<socketType, cf>> shortCurrent{};
 
     //TODO:这里把变压器当成了k=1的变压器，或者说根本没有变压器
@@ -82,12 +83,18 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
     for (const auto &iter : sockData)
     {
         const auto &socket = iter.first;
-        const auto sum = socket.first + socket.second;
-        if (pqNodeSum.find(sum) != pqNodeSum.end())
+        //const auto sum = socket.first + socket.second;
+        if (pqNodeSum.find(socket) != pqNodeSum.end())
             continue;
 
         const auto &y = iter.second.first;
-        pqNodeSum.insert(sum);
+
+        pqNodeSum.insert(
+        {
+            {socket.second, socket.first},
+            socket
+        });
+
         const auto Ipq = (Ui(socket.first - 1) - Ui(socket.second - 1)) * y;
         shortCurrent.emplace_back(std::make_pair(socket, Ipq));
     }
@@ -167,7 +174,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
     auto U2{U1}, U0{U1};
     Eigen::MatrixXf Uabc = Eigen::MatrixXf(branchNum, 3);
 
-#pragma omp parallel for
+    #pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
         U1(i) = cf{1, 0} - this->Z1(faultNode - 1, i) * If(0);
@@ -179,7 +186,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
     for (decltype(branchNum) i = 0; i < branchNum; i++)
         std::cout << "节点" << i + 1 << "的abc相短路电压: " << Uabc.row(i) << std::endl;
 
-    std::map<std::pair<int, int>, std::tuple<cf, cf, cf>> Isx;
+    std::map<std::pair<int, int>, std::tuple<cf, cf, cf>> Isx{};
 
     //#pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
@@ -209,7 +216,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
 
 void Grid::adjustIdealTransformer2_PrimarySideReactanceRatio(const std::vector<Transformer2> &transList)
 {
-#pragma omp parallel for
+    #pragma omp parallel for
     for (decltype(transList.size()) i = 0; i < transList.size(); i++)
     {
         const auto &transformer = transList.at(i);
@@ -278,7 +285,6 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
 
 void Grid::mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pair<IdealTransformer2, cf>> &idealTransList)
 {
-#pragma omp parallel for
     for (decltype(idealTransList.size()) i = 0; i < idealTransList.size(); i++)
     {
         const auto &thisTrans = idealTransList.at(i).first;
@@ -294,13 +300,15 @@ void Grid::mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pa
 
         //TODO: 要不要+1
         this->SocketData1.insert(
-            {{{pNode + 1, qNode + 1}, {y, cf(0.0f, 0.0f)}},
-             {{qNode + 1, pNode + 1}, {y, cf(0.0f, 0.0f)}}});
+        {
+            {{pNode + 1, qNode + 1}, {y, cf(0.0f, 0.0f)}},
+            {{qNode + 1, pNode + 1}, {y, cf(0.0f, 0.0f)}}});
     }
 }
 
 void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
 {
+    #pragma omp parallel for
     for (decltype(transList.size()) i = 0; i < transList.size(); i++)
     {
         const auto &thisTrans = transList.at(i);
@@ -319,7 +327,7 @@ void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
 
 void Grid::mountGenerator(const std::vector<Generator> &geneList)
 {
-#pragma omp parallel for
+    #pragma omp parallel for
     for (decltype(geneList.size()) i = 0; i < geneList.size(); i++)
     {
         const auto &gene = geneList.at(i);
