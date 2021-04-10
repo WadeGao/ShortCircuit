@@ -16,8 +16,8 @@ Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vecto
     this->mountGenerator(geneList);
 
     this->Z1 = this->Y1.inverse();
-    this->Z2 = this->Y2.inverse();
-    this->Z0 = this->Y0.inverse();
+    /*this->Z2 = this->Y2.inverse();
+    this->Z0 = this->Y0.inverse();*/
 }
 
 Grid::~Grid()
@@ -25,7 +25,7 @@ Grid::~Grid()
 }
 
 //通过数据集获得导纳矩阵
-void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixXcf &Y, std::map<std::pair<NodeType, NodeType>, std::pair<cf, cf>> &socketData)
+void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixXcf &Y, std::map<socketType, std::pair<cf, cf>> &socketData)
 {
     //dataSheet: https://img-blog.csdn.net/20180616204918263?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzMyNDEyNzU5/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70
     //但是没有上面变压器变比那一列，因为大部分线路的变比都是1
@@ -42,6 +42,14 @@ void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixX
     //多个线程对同一个容器同时写，线程不安全
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
+        //TODO: 应该完善直接接地的电抗
+        //如果两点最小的那个为零，说明这是一个节点接地电抗
+        if (!std::min(inNode(i), outNode(i)))
+        {
+            const auto insertedNode = std::max(inNode(i), outNode(i)) - 1;
+            Y(insertedNode, insertedNode) += y(i);
+            continue;
+        }
         const NodeType from = inNode(i) - 1, to = outNode(i) - 1;
 
         Y(from, to) -= y(i);
@@ -57,10 +65,33 @@ void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixX
 }
 
 //TODO:对称短路计算
-void Grid::SymmetricShortCircuit(const Eigen::MatrixXcf &AdmittanceMatrix, const NodeType shortPoint, const DeviceArgType Sb, const DeviceArgType Uav)
+std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf, const DeviceArgType Uav)
 {
-    const auto busNum = AdmittanceMatrix.rows();
-    Eigen::VectorXf Is = Eigen::VectorXf::Zero(busNum, 1);
+    const Eigen::VectorXcf &Z = this->Z1.col(shortPoint - 1);
+    Eigen::VectorXcf Ui = Eigen::VectorXcf(this->NodeNum).setOnes();
+    const auto If = cf(Uav, 0) / (Z(shortPoint - 1) + Zf);
+    Ui = Ui.array() - Z.array() * If;
+    Ui(shortPoint - 1) = cf{0.0f, 0.0f};
+
+    std::unordered_set<NodeType> pqNodeSum{};
+    std::list<std::pair<socketType, cf>> shortCurrent{};
+
+    //TODO:这里把变压器当成了k=1的变压器，或者说根本没有变压器
+    //TODO: just write a algorithm to solve Ipq. But Ipq is a n * n Matrix :-(
+    const auto &sockData = this->SocketData1;
+    for (const auto &iter : sockData)
+    {
+        const auto &socket = iter.first;
+        const auto sum = socket.first + socket.second;
+        if (pqNodeSum.find(sum) != pqNodeSum.end())
+            continue;
+
+        const auto &y = iter.second.first;
+        pqNodeSum.insert(sum);
+        const auto Ipq = (Ui(socket.first - 1) - Ui(socket.second - 1)) * y;
+        shortCurrent.emplace_back(std::make_pair(socket, Ipq));
+    }
+    return std::make_tuple(Ui, shortCurrent);
 }
 
 //单相短路计算
@@ -68,7 +99,7 @@ void Grid::lgShortCircuit(const NodeType faultNode, const cf &Zf)
 {
     const auto faultNode2 = faultNode, faultNode0 = faultNode;
 
-    const cf Ifa1 = cf{1, 0} / (Z1(faultNode - 1, faultNode - 1) + Z2(faultNode2 - 1, faultNode2 - 1) + Z0(faultNode0 - 1, faultNode0 - 1) + Zf * cf{0, 3});
+    const cf Ifa1 = cf{1, 0} / (Z1(faultNode - 1, faultNode - 1) + Z2(faultNode2 - 1, faultNode2 - 1) + Z0(faultNode0 - 1, faultNode0 - 1) + Zf * cf{3, 0});
     Eigen::VectorXcf If(3, 1);
     //auto Ifa2{ Ifa1 }, Ifa0{ Ifa1 };
     //If << Ifa1, Ifa2, Ifa0;
@@ -91,7 +122,7 @@ void Grid::llShortCircuit(const NodeType faultNode, const cf &Zf)
     const auto faultNode2 = faultNode;
 
     Eigen::VectorXcf If(3, 1);
-    const cf Ifa1 = cf{1, 0} / (Z1(faultNode - 1, faultNode - 1) + Z2(faultNode2 - 1, faultNode2 - 1) + Zf * cf{0, 1});
+    const cf Ifa1 = cf{1, 0} / (Z1(faultNode - 1, faultNode - 1) + Z2(faultNode2 - 1, faultNode2 - 1) + Zf);
     const cf Ifa2{-Ifa1.real(), -Ifa1.imag()}, Ifa0{0, 0};
     If << Ifa1, Ifa2, Ifa0;
     const Eigen::VectorXcf If_abc = St * If;
@@ -112,7 +143,7 @@ void Grid::llgShortCircuit(const NodeType faultNode, const cf &Zf)
     const auto faultNode2 = faultNode, faultNode0 = faultNode;
 
     Eigen::VectorXcf If(3, 1);
-    const cf Ifa1 = cf{1, 0} / (Z1(faultNode - 1, faultNode - 1) + Z2(faultNode2 - 1, faultNode2 - 1) * (Z0(faultNode0 - 1, faultNode0 - 1) + Zf * cf{0, 3}) / (Z2(faultNode2 - 1, faultNode2 - 1) + Z0(faultNode0 - 1, faultNode0 - 1) + Zf * cf{0, 3}));
+    const cf Ifa1 = cf{1, 0} / (Z1(faultNode - 1, faultNode - 1) + Z2(faultNode2 - 1, faultNode2 - 1) * (Z0(faultNode0 - 1, faultNode0 - 1) + Zf * cf{3, 0}) / (Z2(faultNode2 - 1, faultNode2 - 1) + Z0(faultNode0 - 1, faultNode0 - 1) + Zf * cf{3, 0}));
     const cf Ifa2 = -(cf{1, 0} - Z1(faultNode - 1, faultNode - 1) * Ifa1) / Z2(faultNode2 - 1, faultNode2 - 1);
     const cf Ifa0 = -(cf{1, 0} - Z1(faultNode - 1, faultNode - 1) * Ifa1) / (Z0(faultNode2 - 1, faultNode2 - 1) + Zf * cf{0, 3});
 
@@ -245,25 +276,11 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
     return Eigen::MatrixXcf(0, 0);
 }
 
-void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
-{
-    for(decltype(transList.size()) i = 0; i < transList.size(); i++) {
-        const auto &thisTrans = transList.at(i);
-        const auto y = cf{0, -1 / thisTrans.getXd()};
-        const auto pNode = thisTrans.getPrimaryNode() - 1;
-        const auto qNode = thisTrans.getSecondaryNode() - 1;
-
-        this->Y1(qNode, pNode) += y;
-        this->Y1(pNode, qNode) = this->Y1(qNode, pNode);
-        this->Y1(pNode, pNode) += y;
-        this->Y1(qNode, qNode) += y;
-    }
-}
-
 void Grid::mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pair<IdealTransformer2, cf>> &idealTransList)
 {
 #pragma omp parallel for
-    for(decltype(idealTransList.size()) i = 0; i < idealTransList.size(); i++) {
+    for (decltype(idealTransList.size()) i = 0; i < idealTransList.size(); i++)
+    {
         const auto &thisTrans = idealTransList.at(i).first;
         const auto y = cf{1, 0} / idealTransList.at(i).second;
         const auto pNode = thisTrans.getPrimaryNode() - 1;
@@ -274,16 +291,40 @@ void Grid::mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pa
         this->Y1(pNode, qNode) = this->Y1(qNode, pNode);
         this->Y1(pNode, pNode) += y;
         this->Y1(qNode, qNode) += y / (k * k);
+
+        //TODO: 要不要+1
+        this->SocketData1.insert(
+            {{{pNode + 1, qNode + 1}, {y, cf(0.0f, 0.0f)}},
+             {{qNode + 1, pNode + 1}, {y, cf(0.0f, 0.0f)}}});
+    }
+}
+
+void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
+{
+    for (decltype(transList.size()) i = 0; i < transList.size(); i++)
+    {
+        const auto &thisTrans = transList.at(i);
+        const auto y = cf{0, -1 / thisTrans.getXd()};
+        const auto pNode = thisTrans.getPrimaryNode() - 1;
+        const auto qNode = thisTrans.getSecondaryNode() - 1;
+
+        //TODO: 这里到底是+还是-
+        //this->Y1(qNode, pNode) += y;
+        this->Y1(qNode, pNode) -= y;
+        this->Y1(pNode, qNode) = this->Y1(qNode, pNode);
+        this->Y1(pNode, pNode) += y;
+        this->Y1(qNode, qNode) += y;
     }
 }
 
 void Grid::mountGenerator(const std::vector<Generator> &geneList)
 {
 #pragma omp parallel for
-    for(decltype(geneList.size()) i = 0; i < geneList.size(); i++) {
+    for (decltype(geneList.size()) i = 0; i < geneList.size(); i++)
+    {
         const auto &gene = geneList.at(i);
         const auto node = gene.getNode() - 1;
-        const auto y = cf{0, -1 / gene.getXd()};
+        const auto y = cf{1, 0} / gene.getXd();
         this->Y1(node, node) += y;
     }
 }
