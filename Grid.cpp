@@ -59,9 +59,8 @@ void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixX
 
         const auto line_data_y_B = std::make_pair(y(i), B(i));
         socketData.insert(
-        {
-            {{inNode(i), outNode(i)}, line_data_y_B},
-            {{outNode(i), inNode(i)}, line_data_y_B}});
+            {{{inNode(i), outNode(i)}, line_data_y_B},
+             {{outNode(i), inNode(i)}, line_data_y_B}});
     }
 }
 
@@ -89,10 +88,8 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
         const auto &y = iter.second.first;
 
         pqNodeSum.insert(
-        {
-            {socket.second, socket.first},
-            socket
-        });
+            {{socket.second, socket.first},
+             socket});
 
         const auto Ipq = (Ui(socket.first - 1) - Ui(socket.second - 1)) * y;
         shortCurrent.emplace_back(std::make_pair(socket, Ipq));
@@ -173,7 +170,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
     auto U2{U1}, U0{U1};
     Eigen::MatrixXf Uabc = Eigen::MatrixXf(branchNum, 3);
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
         U1(i) = cf{1, 0} - this->Z1(faultNode - 1, i) * If(0);
@@ -194,11 +191,11 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
         {
             std::pair<int, int> curSocket = std::make_pair(i, j);
             cf Is1{0, 0}, Is2{0, 0}, Is0{0, 0};
-            if (abs(this->Y1(i, j)) > epsilon)
+            if (std::abs(this->Y1(i, j)) > epsilon)
                 Is1 = -(U1(i) - U1(j)) * this->Y1(i, j);
-            if (abs(this->Y2(i, j)) > epsilon)
+            if (std::abs(this->Y2(i, j)) > epsilon)
                 Is2 = -(U2(i) - U2(j)) * this->Y2(i, j);
-            if (abs(this->Y0(i, j)) > epsilon)
+            if (std::abs(this->Y0(i, j)) > epsilon)
                 Is0 = -(U0(i) - U0(j)) * this->Y0(i, j);
             Isx.insert({curSocket, {Is1, Is2, Is0}});
         }
@@ -215,7 +212,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
 
 void Grid::adjustIdealTransformer2_PrimarySideReactanceRatio(const std::vector<Transformer2> &transList)
 {
-    #pragma omp parallel for
+#pragma omp parallel for
     for (decltype(transList.size()) i = 0; i < transList.size(); i++)
     {
         const auto &transformer = transList.at(i);
@@ -299,15 +296,14 @@ void Grid::mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pa
 
         //TODO: 要不要+1
         this->SocketData1.insert(
-        {
-            {{pNode + 1, qNode + 1}, {y, cf(0.0f, 0.0f)}},
-            {{qNode + 1, pNode + 1}, {y, cf(0.0f, 0.0f)}}});
+            {{{pNode + 1, qNode + 1}, {y, cf(0.0f, 0.0f)}},
+             {{qNode + 1, pNode + 1}, {y, cf(0.0f, 0.0f)}}});
     }
 }
 
 void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
 {
-    #pragma omp parallel for
+#pragma omp parallel for
     for (decltype(transList.size()) i = 0; i < transList.size(); i++)
     {
         const auto &thisTrans = transList.at(i);
@@ -326,7 +322,7 @@ void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
 
 void Grid::mountGenerator(const std::vector<Generator> &geneList)
 {
-    #pragma omp parallel for
+#pragma omp parallel for
     for (decltype(geneList.size()) i = 0; i < geneList.size(); i++)
     {
         const auto &gene = geneList.at(i);

@@ -1,15 +1,15 @@
 /*
  * @Author: your name
  * @Date: 2021-04-08 19:08:26
- * @LastEditTime: 2021-04-09 13:08:21
+ * @LastEditTime: 2021-04-11 21:56:03
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/Grid.h
  */
 #pragma once
 #include "Common.h"
-#include "ThreadPool.hpp"
 #include "Generator.h"
+#include "ThreadPool.hpp"
 #include "Transformer.h"
 
 enum class SEQUENCE
@@ -39,8 +39,6 @@ private:
 
     void mountGenerator(const std::vector<Generator> &geneList);
 
-
-
     void getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType faultNode);
 
 public:
@@ -50,7 +48,7 @@ public:
     Eigen::MatrixXcf getYx(const SEQUENCE whichSeq) const;
     Eigen::MatrixXcf getZx(const SEQUENCE whichSeq) const;
 
-    std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf,  const DeviceArgType Uav);
+    std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf, const DeviceArgType Uav);
 
     void lgShortCircuit(const NodeType faultNode, const cf &Zf);
 

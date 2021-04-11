@@ -10,14 +10,14 @@
 #include "Equipment.h"
 #include <Eigen/Dense>
 #include <cmath>
+#include <list>
 #include <map>
 #include <omp.h>
+#include <set>
 #include <thread>
 #include <tuple>
 #include <utility>
 #include <vector>
-#include <set>
-#include <list>
 
 constexpr auto PI = 3.14159265358979323846;
 constexpr auto epsilon = 1e-4;

@@ -1,6 +1,6 @@
 #pragma once
-#include <cstddef>
 #include <complex>
+#include <cstddef>
 
 using NodeType = size_t;
 using DeviceArgType = float;

@@ -1,9 +1,9 @@
 #pragma once
 
+#include "Common.h"
 #include <iostream>
-#include <string>
-#include <list>
 #include <mysql/mysql.h>
+#include <string>
 
 class Database
 {
@@ -19,11 +19,9 @@ public:
     //从数据库中创建表、更新表、 删除表
     bool CUD_MySQL(const std::string &query);
     //返回数据库中表的集合
-    std::list<std::string> GetTables();
-    //返回数据库中表的集合到屏幕
-    void GetTables2Screen();
+    std::vector<std::string> GetTables();
     //读取数据库内容
-    std::list<std::list<std::string>> ReadMySQL(const std::string &query);
-    //读取数据库内容到屏幕
-    void ReadMySQL2Screen(const std::string &query);
+    std::vector<std::vector<std::string>> ReadMySQL(const std::string &query);
+
+    std::tuple<size_t, size_t> getTableSize(const std::string &tableName);
 };
