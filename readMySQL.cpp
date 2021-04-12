@@ -17,28 +17,41 @@ DataFetcher::DataFetcher(const char *host, const char *user, const char *db, uns
     }
 }
 
-Eigen::MatrixXf DataFetcher::getData(const char *TableName)
+std::vector<std::vector<float>> DataFetcher::getData(const char *TableName)
 {
     const auto &TableSize = this->db.getTableSize(TableName);
     //TODO: 这里，只要矩阵维度参数有一个是0，就不行，我已经定位问题了
-    Eigen::MatrixXf ret(std::get<0>(TableSize), std::get<1>(TableSize));
-    const auto &Data = this->db.ReadMySQL("SELECT * FROM Line;");
+    if(!std::get<0>(TableSize))
+        return {};
+
+    std::vector<std::vector<float>> ret(std::get<0>(TableSize), std::vector(std::get<1>(TableSize), 0.00f));
+    const auto &query = std::string("SELECT * FROM ") + std::string(TableName) + std::string(";");
+    const DatabaseTableType &Data = this->db.ReadMySQL(query);
 
 #pragma omp parallel for
     for (decltype(Data.size()) row = 0; row < Data.size(); row++)
     {
         const auto &curRowData = Data.at(row);
         for (decltype(curRowData.size()) col = 0; col < curRowData.size(); col++)
-            ret(row, col) = atof(curRowData.at(col).c_str());
+            ret[row][col] = atof(curRowData.at(col).c_str());
     }
-    std::cout << __LINE__ << std::endl;
+
     return ret;
 }
 
 Eigen::MatrixXf DataFetcher::getLineData()
 {
     const auto &ret = this->getData("Line");
-    return ret;
+    auto Rows = ret.size(), Cols = ret.at(0).size();
+    Eigen::MatrixXf LineData = Eigen::MatrixXf::Zero(Rows, Cols);
+
+#pragma omp parallel for
+    for(decltype(Rows) i = 0; i < Rows; i++){
+        const auto &curRow = ret.at(i);
+        for(decltype(Cols) j = 0; j <Cols; j++)
+            LineData(i, j) = curRow.at(j);
+    }
+    return LineData;
 }
 
 
@@ -46,31 +59,28 @@ std::vector<std::pair<IdealTransformer2, cf>> DataFetcher::getIdealTransWithReac
 {
 
     const auto &rawData = this->getData("IdealTransformer2");
-    if(!rawData.rows()) return {};
-    std::vector<std::pair<IdealTransformer2, cf>> ret(rawData.rows(), {{1, 2, 1.00}, {0, 0}});
-    //ret.resize(rawData.rows());
+    if(!rawData.size()) return {};
+    std::vector<std::pair<IdealTransformer2, cf>> ret(rawData.size(), {{1, 2, 1.00}, {0, 0}});
 
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++)
     {
-        IdealTransformer2 thisTrans(rawData(i, 0), rawData(i, 1), rawData(i, 2));
-        cf priZ{rawData(i, 3), rawData(i, 4)};
+        IdealTransformer2 thisTrans(rawData.at(i).at(0), rawData.at(i).at(1), rawData.at(i).at(2));
+        cf priZ{rawData.at(i).at(3), rawData.at(i).at(4)};
         ret[i] = std::make_pair(thisTrans, priZ);
     }
     return ret;
 }
 
-
 std::vector<Transformer2> DataFetcher::getTransformer2List(const DeviceArgType SB)
 {
     const auto &rawData = this->getData("Transformer2");
-    if(!rawData.rows()) return {};
-    std::vector<Transformer2> ret(rawData.rows(), {1, 2, 1, 1, 1, 1});
-    //ret.resize(rawData.rows());
+    if(!rawData.size()) return {};
+    std::vector<Transformer2> ret(rawData.size(), {1, 2, 1, 1, 1, 1});
 
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++)
-        ret[i] = Transformer2(rawData(i, 0), rawData(i, 1), rawData(i, 2), rawData(i, 3), rawData(i, 4), SB);
+        ret[i] = Transformer2(rawData.at(i).at(0), rawData.at(i).at(1), rawData.at(i).at(2), rawData.at(i).at(3), rawData.at(i).at(4), SB);
 
     return ret;
 }
@@ -78,12 +88,12 @@ std::vector<Transformer2> DataFetcher::getTransformer2List(const DeviceArgType S
 std::vector<Generator> DataFetcher::getGeneratorList(const DeviceArgType SB)
 {
     const auto &rawData = this->getData("Generator");
-    if(!rawData.rows()) return {};
-    std::vector<Generator> ret(rawData.rows(), {1, 1, {0, 0}, 1});
+    if(!rawData.size()) return {};
+    std::vector<Generator> ret(rawData.size(), {1, 1, {0, 0}, 1});
 
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++)
-        ret[i] = Generator(rawData(i, 0), rawData(i, 1), cf{rawData(i, 2), rawData(i, 3)}, SB);
+        ret[i] = Generator(rawData.at(i).at(0), rawData.at(i).at(1), cf{rawData.at(i).at(2), rawData.at(i).at(3)}, SB);
 
     return ret;
 }

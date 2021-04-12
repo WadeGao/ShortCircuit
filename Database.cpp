@@ -61,7 +61,7 @@ std::vector<std::string> Database::GetTables()
     return allTables;
 }
 
-std::vector<std::vector<std::string>> Database::ReadMySQL(const std::string &query)
+DatabaseTableType Database::ReadMySQL(const std::string &query)
 {
     if (mysql_query(&this->mysql, query.c_str()))
     {

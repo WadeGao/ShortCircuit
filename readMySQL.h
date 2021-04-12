@@ -17,7 +17,7 @@ class DataFetcher
 {
 private:
     Database db;
-    Eigen::MatrixXf getData(const char *TableName);
+    std::vector<std::vector<float>> getData(const char *TableName);
 
 public:
     DataFetcher(const char *host, const char *user, const char *db, unsigned int port = 3306);

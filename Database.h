@@ -5,6 +5,8 @@
 #include <mysql/mysql.h>
 #include <string>
 
+using DatabaseTableType = std::vector<std::vector<std::string>>;
+
 class Database
 {
 private:
@@ -21,7 +23,8 @@ public:
     //返回数据库中表的集合
     std::vector<std::string> GetTables();
     //读取数据库内容
-    std::vector<std::vector<std::string>> ReadMySQL(const std::string &query);
+    DatabaseTableType ReadMySQL(const std::string &query);
 
     std::tuple<size_t, size_t> getTableSize(const std::string &tableName);
 };
+

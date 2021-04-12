@@ -20,12 +20,12 @@
 int main()
 {
     DataFetcher util("wadegao.tpddns.net", "root", "Grid");
-    //const auto &LineData = util.getLineData();
-    //const auto &IdealTransformer2Data = util.getIdealTransWithReactanceList();
+    const auto &LineData = util.getLineData();
+    const auto &IdealTransformer2Data = util.getIdealTransWithReactanceList();
     const auto &Transformer2Data = util.getTransformer2List(120);
-    //const auto &GeneratorData = util.getGeneratorList(120);
+    const auto &GeneratorData = util.getGeneratorList(120);
 
-    /*Grid my_grid(5, {LineData, LineData, LineData}, IdealTransformer2Data, Transformer2Data, GeneratorData);
+    Grid my_grid(5, {LineData, LineData, LineData}, IdealTransformer2Data, Transformer2Data, GeneratorData);
 
     const auto ret = my_grid.SymmetricShortCircuit(3, cf(0.0f, 0.0f), 1);
 
@@ -36,7 +36,7 @@ int main()
     for(const auto &iter : I_list)
     {
         std::cout << "I" << iter.first.first << iter.first.second << ": " << std::abs(iter.second) << " A" << std::endl;
-    }*/
+    }
 
     return 0;
 }
