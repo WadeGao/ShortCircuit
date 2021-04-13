@@ -35,7 +35,7 @@ int main()
     const auto &I_list = std::get<1>(ret);
     for(const auto &iter : I_list)
     {
-        std::cout << "I" << iter.first.first << iter.first.second << ": " << std::abs(iter.second) << " A" << std::endl;
+        std::cout << "I" << iter.first.first << iter.first.second << ": " << std::abs(iter.second)  << std::endl;
     }
 
     return 0;
