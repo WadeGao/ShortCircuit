@@ -25,6 +25,6 @@ public:
     //读取数据库内容
     DatabaseTableType ReadMySQL(const std::string &query);
 
-    std::tuple<size_t, size_t> getTableSize(const std::string &tableName);
+    std::tuple<size_t, size_t> getQuerySize(const std::string &query);
 };
 

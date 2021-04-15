@@ -23,20 +23,11 @@ bool Database::ConnectMySQL(const char *host, const char *user, const char *db, 
 
         if (!mysql_real_connect(&this->mysql, host, user, pwd, db, port, nullptr, CLIENT_FOUND_ROWS))
         {
-            fprintf(stderr, "Connect Failed: %s\n\n", mysql_error(&this->mysql));
-            if (++failedTimes >= 3)
-            {
-                fprintf(stderr, "Failed too many times, deny to serve.\n");
-                return false;
-            }
+            fprintf(stderr, "Connection Failed: %s\n\n", mysql_error(&this->mysql));
+            if (++failedTimes >= 3)    return false;
         }
-        else
-        {
-            fprintf(stdout, "Connect successfully\n");
-            break;
-        }
+        else    break;
     }
-
     return true;
 }
 
@@ -90,9 +81,9 @@ DatabaseTableType Database::ReadMySQL(const std::string &query)
     return res;
 }
 
-std::tuple<size_t, size_t> Database::getTableSize(const std::string &tableName)
+std::tuple<size_t, size_t> Database::getQuerySize(const std::string &query)
 {
-    const std::string query = "SELECT * FROM " + tableName;
+    //const std::string query = "SELECT * FROM " + tableName;
     if (mysql_query(&this->mysql, query.c_str()))
         return {0, 0};
 

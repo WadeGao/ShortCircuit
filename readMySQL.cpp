@@ -17,15 +17,15 @@ DataFetcher::DataFetcher(const char *host, const char *user, const char *db, uns
     }
 }
 
-std::vector<std::vector<float>> DataFetcher::getData(const char *TableName)
+std::vector<std::vector<float>> DataFetcher::getData(const std::string &query)
 {
-    const auto &TableSize = this->db.getTableSize(TableName);
+    const auto &TableSize = this->db.getQuerySize(query);
     //TODO: 这里，只要矩阵维度参数有一个是0，就不行，我已经定位问题了
     if(!std::get<0>(TableSize))
         return {};
 
     std::vector<std::vector<float>> ret(std::get<0>(TableSize), std::vector(std::get<1>(TableSize), 0.00f));
-    const auto &query = std::string("SELECT * FROM ") + std::string(TableName) + std::string(";");
+    //const auto &query = std::string("SELECT * FROM ") + std::string(TableName) + std::string(";");
     const DatabaseTableType &Data = this->db.ReadMySQL(query);
 
 #pragma omp parallel for
@@ -41,7 +41,7 @@ std::vector<std::vector<float>> DataFetcher::getData(const char *TableName)
 
 Eigen::MatrixXf DataFetcher::getLineData()
 {
-    const auto &ret = this->getData("Line");
+    const auto &ret = this->getData(queryLine);
     auto Rows = ret.size(), Cols = ret.at(0).size();
     Eigen::MatrixXf LineData = Eigen::MatrixXf::Zero(Rows, Cols);
 
@@ -54,11 +54,9 @@ Eigen::MatrixXf DataFetcher::getLineData()
     return LineData;
 }
 
-
 std::vector<std::pair<IdealTransformer2, cf>> DataFetcher::getIdealTransWithReactanceList()
 {
-
-    const auto &rawData = this->getData("IdealTransformer2");
+    const auto &rawData = this->getData(queryTransformer);
     if(!rawData.size()) return {};
     std::vector<std::pair<IdealTransformer2, cf>> ret(rawData.size(), {{1, 2, 1.00}, {0, 0}});
 
@@ -72,9 +70,10 @@ std::vector<std::pair<IdealTransformer2, cf>> DataFetcher::getIdealTransWithReac
     return ret;
 }
 
+/*
 std::vector<Transformer2> DataFetcher::getTransformer2List(const DeviceArgType SB)
 {
-    const auto &rawData = this->getData("Transformer2");
+    const auto &rawData = this->getData("SELECT * FROM Transformer2");
     if(!rawData.size()) return {};
     std::vector<Transformer2> ret(rawData.size(), {1, 2, 1, 1, 1, 1});
 
@@ -84,16 +83,31 @@ std::vector<Transformer2> DataFetcher::getTransformer2List(const DeviceArgType S
 
     return ret;
 }
+*/
 
 std::vector<Generator> DataFetcher::getGeneratorList(const DeviceArgType SB)
 {
-    const auto &rawData = this->getData("Generator");
+    const auto &rawData = this->getData(queryGenerator);
     if(!rawData.size()) return {};
     std::vector<Generator> ret(rawData.size(), {1, 1, {0, 0}, 1});
 
 #pragma omp parallel for
-    for (decltype(ret.size()) i = 0; i < ret.size(); i++)
-        ret[i] = Generator(rawData.at(i).at(0), rawData.at(i).at(1), cf{rawData.at(i).at(2), rawData.at(i).at(3)}, SB);
+    for (decltype(ret.size()) i = 0; i < ret.size(); i++){
+        const auto &curRowData = rawData.at(i);
+        ret[i] = Generator(curRowData.at(0), curRowData.at(1), cf(0.0f, 0.0f), SB);
+    }
+    return ret;
+}
 
+std::vector<std::tuple<NodeType, float, float>> DataFetcher::getNodeArgList()
+{
+    const auto rawData = this->getData(queryNode);
+    if(!rawData.size())    return {};
+    std::vector<std::tuple<NodeType, float, float>> ret(rawData.size(), {0, 0.0f, 0.0f});
+#pragma omp parallel for
+    for (decltype(ret.size()) i = 0; i < ret.size(); i++){
+        const auto &curRowData = rawData.at(i);
+        ret[i] = {curRowData.at(0), curRowData.at(1), curRowData.at(2)};
+    }
     return ret;
 }

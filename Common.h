@@ -20,11 +20,11 @@
 #include <vector>
 
 constexpr auto PI = 3.14159265358979323846;
-constexpr auto epsilon = 1e-4;
+constexpr auto epsilon = 1e-6;
 constexpr auto Imaginer = cf{0, 1};
 const cf alpha = {cosf(PI * 2 / 3), sinf(PI * 2 / 3)};
 const auto maxThreadsNum = std::thread::hardware_concurrency();
-const Eigen::MatrixXcf St = (Eigen::MatrixXcf(3, 3) << 1, 1, 1, alpha *alpha, alpha, 1, alpha, alpha *alpha, 1).finished(); //�������(1 / 3 * S)����
+const Eigen::MatrixXcf St = (Eigen::MatrixXcf(3, 3) << 1, 1, 1, alpha * alpha, alpha, 1, alpha, alpha * alpha, 1).finished(); //�������(1 / 3 * S)����
 
 using ThreeSequenceData = struct ThreeSequenceData
 {

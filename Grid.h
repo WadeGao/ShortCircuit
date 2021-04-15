@@ -42,7 +42,7 @@ private:
     void getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType faultNode);
 
 public:
-    Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList);
+    Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::tuple<NodeType, float, float>> &NodeList, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList);
     ~Grid();
 
     Eigen::MatrixXcf getYx(const SEQUENCE whichSeq) const;

@@ -1,15 +1,25 @@
 #include "Grid.h"
 #include <iostream>
 
-Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList) : NodeNum(node_), myPool(maxThreadsNum)
+Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::tuple<NodeType, float, float>> &NodeList, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList) : NodeNum(node_), myPool(maxThreadsNum)
 {
-    omp_set_num_threads(std::thread::hardware_concurrency());
+    //omp_set_num_threads(std::thread::hardware_concurrency());
 
     this->Y2 = this->Y0 = this->Y1 = Eigen::MatrixXcf::Zero(this->NodeNum, this->NodeNum);
+
 
     this->setYxFromSheet(data.lineData1, this->Y1, this->SocketData1);
     this->setYxFromSheet(data.lineData2, this->Y2, this->SocketData2);
     this->setYxFromSheet(data.lineData0, this->Y0, this->SocketData0);
+
+    for(decltype(NodeList.size()) i = 0; i < NodeList.size(); i++){
+        const auto &curNodeTuple = NodeList.at(i);
+        const auto &node = std::get<0>(curNodeTuple) - 1;
+        const auto &Gs = std::get<1>(curNodeTuple);
+        const auto &Bs = std::get<2>(curNodeTuple);
+        this->Y1(node, node) += (Gs + Bs);
+    }
+    //std::cout << this->Y1 << std::endl;
 
     this->mountIdealTransformer2_PrimarySideReactance(idealTransformList);
     this->mountTransformer2(transList);
@@ -18,6 +28,7 @@ Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vecto
     this->Z1 = this->Y1.inverse();
     /*this->Z2 = this->Y2.inverse();
     this->Z0 = this->Y0.inverse();*/
+
 }
 
 Grid::~Grid()
@@ -44,12 +55,12 @@ void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixX
     {
         //TODO: 应该完善直接接地的电抗
         //如果两点最小的那个为零，说明这是一个节点接地电抗
-        if (!std::min(inNode(i), outNode(i)))
+        /*if (std::min(inNode(i), outNode(i)) == 0)
         {
             const auto insertedNode = std::max(inNode(i), outNode(i)) - 1;
             Y(insertedNode, insertedNode) += y(i);
             continue;
-        }
+        }*/
         const NodeType from = inNode(i) - 1, to = outNode(i) - 1;
 
         Y(from, to) -= y(i);
@@ -73,7 +84,7 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
     Ui = Ui.array() - Z.array() * If;
     Ui(shortPoint - 1) = cf{0.0f, 0.0f};
 
-    std::set<socketType> pqNodeSum{};
+    std::set<socketType> pqNode{};
     std::list<std::pair<socketType, cf>> shortCurrent{};
 
     //TODO:这里把变压器当成了k=1的变压器，或者说根本没有变压器
@@ -82,12 +93,12 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
     {
         const auto &socket = iter.first;
         //const auto sum = socket.first + socket.second;
-        if (pqNodeSum.find(socket) != pqNodeSum.end())
+        if (pqNode.find(socket) != pqNode.end())
             continue;
 
         const auto &y = iter.second.first;
 
-        pqNodeSum.insert(
+        pqNode.insert(
             {{socket.second, socket.first},
              socket});
 
