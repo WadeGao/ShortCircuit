@@ -19,14 +19,14 @@
 
 int main()
 {
-    DataFetcher util("wadegao.tpddns.net", "root", "DataSet500");
+    DataFetcher util("wadegao.tpddns.net", "root", "IEEE14");
     const auto &LineData = util.getLineData();
     const auto &IdealTransformer2Data = util.getIdealTransWithReactanceList();
     //const auto &Transformer2Data = util.getTransformer2List(120);
     const auto &GeneratorData = util.getGeneratorList(120);
     const auto &NodeData = util.getNodeArgList();
 
-    Grid my_grid(500, {LineData, LineData, LineData}, NodeData, IdealTransformer2Data, {}, GeneratorData);
+    Grid my_grid(14, {LineData, LineData, LineData}, NodeData, IdealTransformer2Data, {}, GeneratorData);
 
     const auto ret = my_grid.SymmetricShortCircuit(3, cf(0.0f, 0.0f), 1);
 
