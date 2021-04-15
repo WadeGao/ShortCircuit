@@ -9,8 +9,8 @@ Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vecto
 
 
     this->setYxFromSheet(data.lineData1, this->Y1, this->SocketData1);
-    //this->setYxFromSheet(data.lineData2, this->Y2, this->SocketData2);
-    //this->setYxFromSheet(data.lineData0, this->Y0, this->SocketData0);
+    this->setYxFromSheet(data.lineData2, this->Y2, this->SocketData2);
+    this->setYxFromSheet(data.lineData0, this->Y0, this->SocketData0);
 
     for(decltype(NodeList.size()) i = 0; i < NodeList.size(); i++){
         const auto &curNodeTuple = NodeList.at(i);
@@ -19,12 +19,10 @@ Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vecto
         const auto &Bs = std::get<2>(curNodeTuple);
         this->Y1(node, node) += (Gs + Bs);
     }
+    //std::cout << this->Y1 << std::endl;
+
     this->mountIdealTransformer2_PrimarySideReactance(idealTransformList);
-    //TODO:到这儿没问题，Z矩阵是可逆的
     this->mountTransformer2(transList);
-
-
-    //TODO:这里有bug，导致Y矩阵变成inf啥的
     this->mountGenerator(geneList);
 
     this->Z1 = this->Y1.inverse();
@@ -75,8 +73,6 @@ void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixX
             {{{inNode(i), outNode(i)}, line_data_y_B},
              {{outNode(i), inNode(i)}, line_data_y_B}});
     }
-
-    //std::cout << Y << std::endl;
 }
 
 //TODO:对称短路计算

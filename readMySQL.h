@@ -28,7 +28,7 @@ public:
     std::vector<std::tuple<NodeType, float, float>> getNodeArgList();
 };
 
-const std::string queryLine = "select tapBusNo, ZbusNo, R, X, B from branch where transformerFinalTurnsRatio = 0;";
-const std::string queryTransformer = "select tapBusNo, ZbusNo, R, X, B, transformerFinalTurnsRatio from branch where transformerFinalTurnsRatio <> 0;";
-const std::string queryGenerator = "select bus, generationMW, generationMVAR from bus where (generationMW <> 0 or generationMVAR <> 0);";
-const std::string queryNode = "select bus, G, B FROM bus WHERE (G <> 0 or B <> 0) and (generationMW = 0 and generationMVAR = 0);";
+const std::string queryLine = "select fbus, tbus, r, x, b from branch where status = 1 and ratio = 0;";
+const std::string queryTransformer = "select tbus, fbus, ratio, r, x from branch where status = 1 and ratio <> 0;";
+const std::string queryGenerator = "SELECT bus, mBase as Sn from generator where status = 1;";
+const std::string queryNode = "SELECT bus_i, Gs, Bs FROM bus WHERE Gs <> 0 OR Bs <> 0;";

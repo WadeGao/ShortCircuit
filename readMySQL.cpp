@@ -25,6 +25,7 @@ std::vector<std::vector<float>> DataFetcher::getData(const std::string &query)
         return {};
 
     std::vector<std::vector<float>> ret(std::get<0>(TableSize), std::vector(std::get<1>(TableSize), 0.00f));
+    //const auto &query = std::string("SELECT * FROM ") + std::string(TableName) + std::string(";");
     const DatabaseTableType &Data = this->db.ReadMySQL(query);
 
 #pragma omp parallel for
@@ -47,7 +48,7 @@ Eigen::MatrixXf DataFetcher::getLineData()
 #pragma omp parallel for
     for(decltype(Rows) i = 0; i < Rows; i++){
         const auto &curRow = ret.at(i);
-        for(decltype(Cols) j = 0; j < Cols; j++)
+        for(decltype(Cols) j = 0; j <Cols; j++)
             LineData(i, j) = curRow.at(j);
     }
     return LineData;
@@ -62,8 +63,8 @@ std::vector<std::pair<IdealTransformer2, cf>> DataFetcher::getIdealTransWithReac
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++)
     {
-        IdealTransformer2 thisTrans(rawData.at(i).at(0), rawData.at(i).at(1), rawData.at(i).at(5));
-        cf priZ{rawData.at(i).at(2), rawData.at(i).at(3)};
+        IdealTransformer2 thisTrans(rawData.at(i).at(0), rawData.at(i).at(1), rawData.at(i).at(2));
+        cf priZ{rawData.at(i).at(3), rawData.at(i).at(4)};
         ret[i] = std::make_pair(thisTrans, priZ);
     }
     return ret;
@@ -93,7 +94,7 @@ std::vector<Generator> DataFetcher::getGeneratorList(const DeviceArgType SB)
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++){
         const auto &curRowData = rawData.at(i);
-        ret[i] = Generator(curRowData.at(0), std::abs(cf(curRowData.at(1), curRowData.at(2))), cf(0.0f, 0.0f), SB);
+        ret[i] = Generator(curRowData.at(0), curRowData.at(1), cf(0.0f, 0.0f), SB);
     }
     return ret;
 }
