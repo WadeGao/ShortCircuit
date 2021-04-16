@@ -2,7 +2,7 @@
 #include <complex>
 #include <cstddef>
 
-using NodeType = size_t;
+using NodeType = int;
 using DeviceArgType = float;
 using cf = std::complex<DeviceArgType>;
 using socketType = std::pair<NodeType, NodeType>;

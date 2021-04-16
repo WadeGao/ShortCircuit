@@ -25,24 +25,15 @@ private:
     NodeType NodeNum{0};
     ThreadPool myPool;
     Eigen::MatrixXcf Z1, Z2, Z0;
-    Eigen::MatrixXcf Y1, Y2, Y0;
-    //socket->{Y, B}
-    std::map<socketType, std::pair<cf, cf>> SocketData1{}, SocketData2{}, SocketData0{};
+    Eigen::SparseMatrix<cf> Y1, Y2, Y0;
+    //socket->Y
+    std::map<socketType, cf> SocketData1{}, SocketData2{}, SocketData0{};
 
-    void setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixXcf &Y, std::map<socketType, std::pair<cf, cf>> &socketData);
-
-    void adjustIdealTransformer2_PrimarySideReactanceRatio(const std::vector<Transformer2> &transList);
-
-    void mountTransformer2(const std::vector<Transformer2> &transList);
-
-    void mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pair<IdealTransformer2, cf>> &idealTransList);
-
-    void mountGenerator(const std::vector<Generator> &geneList);
-
+    static void wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap);
     void getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType faultNode);
 
 public:
-    Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::tuple<NodeType, float, float>> &NodeList, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList);
+    Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList);
     ~Grid();
 
     Eigen::MatrixXcf getYx(const SEQUENCE whichSeq) const;

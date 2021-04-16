@@ -38,33 +38,49 @@ std::vector<std::vector<float>> DataFetcher::getData(const std::string &query)
     return ret;
 }
 
-Eigen::MatrixXf DataFetcher::getLineData()
+std::vector<Eigen::Triplet<cf>> DataFetcher::getLineTripletList()
 {
-    const auto &ret = this->getData(queryLine);
-    auto Rows = ret.size(), Cols = ret.at(0).size();
-    Eigen::MatrixXf LineData = Eigen::MatrixXf::Zero(Rows, Cols);
+    const auto &rawData = this->getData(queryLine);
+    auto Rows = rawData.size();
+    if(!Rows)    return {};
 
+    std::vector<Eigen::Triplet<cf>> ret(3 * Rows, {0, 0, cf(0, 0)});
 #pragma omp parallel for
-    for(decltype(Rows) i = 0; i < Rows; i++){
-        const auto &curRow = ret.at(i);
-        for(decltype(Cols) j = 0; j < Cols; j++)
-            LineData(i, j) = curRow.at(j);
+    for(decltype(Rows) i = 0; i < Rows; i++)
+    {
+        const auto &curRow = rawData.at(i);
+
+        const int from = curRow.at(0) - 1, to = curRow.at(1) - 1;
+        const auto &y = (cf(1, 0) / cf(curRow.at(2), curRow.at(3)));
+        const auto &B = cf(0, curRow.at(4));
+        const auto Y_self = y + B / cf(2, 0);
+
+        ret[3 * i] = Eigen::Triplet<cf>{std::max(from, to), std::min(from, to), cf(0, 0) - y};
+        ret[3 * i + 1] = Eigen::Triplet<cf>{from, from, Y_self};
+        ret[3 * i + 2] = Eigen::Triplet<cf>{to, to, Y_self};
     }
-    return LineData;
+    return ret;
 }
 
-std::vector<std::pair<IdealTransformer2, cf>> DataFetcher::getIdealTransWithReactanceList()
+std::vector<Eigen::Triplet<cf>> DataFetcher::getIdealTransWithTripletReactanceList()
 {
     const auto &rawData = this->getData(queryTransformer);
-    if(!rawData.size()) return {};
-    std::vector<std::pair<IdealTransformer2, cf>> ret(rawData.size(), {{1, 2, 1.00}, {0, 0}});
+    if(!rawData.size())    return {};
+    std::vector<Eigen::Triplet<cf>> ret(3 * rawData.size(), {0, 0, cf(0, 0)});
 
 #pragma omp parallel for
-    for (decltype(ret.size()) i = 0; i < ret.size(); i++)
+    for (decltype(rawData.size()) i = 0; i < rawData.size(); i++)
     {
-        IdealTransformer2 thisTrans(rawData.at(i).at(0), rawData.at(i).at(1), rawData.at(i).at(5));
-        cf priZ{rawData.at(i).at(2), rawData.at(i).at(3)};
-        ret[i] = std::make_pair(thisTrans, priZ);
+        const auto &curRow = rawData.at(i);
+
+        const int pNode = curRow.at(0) - 1, qNode = curRow.at(1) - 1;
+        const auto &k = curRow.at(4);
+        const auto &y = cf{1, 0} / cf{curRow.at(2), curRow.at(3)};
+
+        ret[3 * i] = Eigen::Triplet<cf>{std::max(pNode, qNode), std::min(pNode, qNode), cf(0, 0) - y / k};
+        ret[3 * i + 1] = Eigen::Triplet<cf>{pNode, pNode, y};
+        ret[3 * i + 2] = Eigen::Triplet<cf>{qNode, qNode, y / (k * k)};
+
     }
     return ret;
 }
@@ -84,29 +100,38 @@ std::vector<Transformer2> DataFetcher::getTransformer2List(const DeviceArgType S
 }
 */
 
-std::vector<Generator> DataFetcher::getGeneratorList(const DeviceArgType SB)
+std::vector<Eigen::Triplet<cf>> DataFetcher::getGeneratorTripletList(const DeviceArgType SB)
 {
     const auto &rawData = this->getData(queryGenerator);
-    if(!rawData.size()) return {};
-    std::vector<Generator> ret(rawData.size(), {1, 1, {0, 0}, 1});
+    if(!rawData.size())    return {};
+    std::vector<Eigen::Triplet<cf>> ret(rawData.size(), {0, 0, cf(0, 0)});
 
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++){
         const auto &curRowData = rawData.at(i);
-        ret[i] = Generator(curRowData.at(0), std::abs(cf(curRowData.at(1), curRowData.at(2))), cf(0.0f, 0.0f), SB);
+        // Node(Node_), Sn(Sn_), xd_(__xd), Xd(__xd * SB_ / Sn_)
+        const int node = curRowData.at(0) - 1;
+        const auto Sn = std::abs(cf(curRowData.at(1), curRowData.at(2)));
+        const auto __xd = cf(0.0f, 0.0f);
+        const auto Xd = __xd * SB / Sn;
+        const auto y = (std::abs(Xd) > epsilon) ? (cf{1, 0} / Xd) : cf(0, 0);
+        ret[i] = Eigen::Triplet<cf>{node, node, y};
     }
+
     return ret;
 }
 
-std::vector<std::tuple<NodeType, float, float>> DataFetcher::getNodeArgList()
+std::vector<Eigen::Triplet<cf>> DataFetcher::getNodeTripletList()
 {
     const auto rawData = this->getData(queryNode);
     if(!rawData.size())    return {};
-    std::vector<std::tuple<NodeType, float, float>> ret(rawData.size(), {0, 0.0f, 0.0f});
+    std::vector<Eigen::Triplet<cf>> ret(rawData.size(), {0, 0, cf(0, 0)});
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++){
         const auto &curRowData = rawData.at(i);
-        ret[i] = {curRowData.at(0), curRowData.at(1), curRowData.at(2)};
+        const int &node = curRowData.at(0);
+        const auto Gs_add_Bs = cf(0.0f, curRowData.at(1) + curRowData.at(2));
+        ret[i] = Eigen::Triplet<cf>{node, node, Gs_add_Bs};
     }
     return ret;
 }

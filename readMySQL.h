@@ -21,14 +21,14 @@ private:
 
 public:
     DataFetcher(const char *host, const char *user, const char *db, unsigned int port = 3306);
-    Eigen::MatrixXf getLineData();
-    std::vector<std::pair<IdealTransformer2, cf>> getIdealTransWithReactanceList();
+    std::vector<Eigen::Triplet<cf>> getLineTripletList();
+    std::vector<Eigen::Triplet<cf>> getIdealTransWithTripletReactanceList();
     //std::vector<Transformer2> getTransformer2List(const DeviceArgType SB);
-    std::vector<Generator> getGeneratorList(const DeviceArgType SB);
-    std::vector<std::tuple<NodeType, float, float>> getNodeArgList();
+    std::vector<Eigen::Triplet<cf>> getGeneratorTripletList(const DeviceArgType SB);
+    std::vector<Eigen::Triplet<cf>> getNodeTripletList();
 };
 
 const std::string queryLine = "select tapBusNo, ZbusNo, R, X, B from branch where transformerFinalTurnsRatio = 0;";
-const std::string queryTransformer = "select tapBusNo, ZbusNo, R, X, B, transformerFinalTurnsRatio from branch where transformerFinalTurnsRatio <> 0;";
+const std::string queryTransformer = "select tapBusNo, ZbusNo, R, X, transformerFinalTurnsRatio from branch where transformerFinalTurnsRatio <> 0;";
 const std::string queryGenerator = "select bus, generationMW, generationMVAR from bus where (generationMW <> 0 or generationMVAR <> 0);";
 const std::string queryNode = "select bus, G, B FROM bus WHERE (G <> 0 or B <> 0) and (generationMW = 0 and generationMVAR = 0);";

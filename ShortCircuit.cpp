@@ -20,13 +20,13 @@
 int main()
 {
     DataFetcher util("wadegao.tpddns.net", "root", "IEEE14");
-    const auto &LineData = util.getLineData();
-    const auto &IdealTransformer2Data = util.getIdealTransWithReactanceList();
+    const auto &LineData = util.getLineTripletList();
+    const auto &IdealTransformer2Data = util.getIdealTransWithTripletReactanceList();
     //const auto &Transformer2Data = util.getTransformer2List(120);
-    const auto &GeneratorData = util.getGeneratorList(120);
-    const auto &NodeData = util.getNodeArgList();
+    const auto &GeneratorData = util.getGeneratorTripletList(120);
+    const auto &NodeData = util.getNodeTripletList();
 
-    Grid my_grid(14, {LineData, LineData, LineData}, NodeData, IdealTransformer2Data, {}, GeneratorData);
+    Grid my_grid(14, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
 
     const auto ret = my_grid.SymmetricShortCircuit(3, cf(0.0f, 0.0f), 1);
 
@@ -36,7 +36,7 @@ int main()
     const auto &I_list = std::get<1>(ret);
     for(const auto &iter : I_list)
     {
-        std::cout << "I[" << iter.first.first << "][" << iter.first.second << "]: " << std::abs(iter.second)  << std::endl;
+        std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: " << std::abs(iter.second)  << std::endl;
     }
     return 0;
 }

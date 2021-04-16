@@ -1,33 +1,37 @@
 #include "Grid.h"
 #include <iostream>
 
-Grid::Grid(const NodeType node_, const ThreeSequenceData &data, const std::vector<std::tuple<NodeType, float, float>> &NodeList, const std::vector<std::pair<IdealTransformer2, cf>> &idealTransformList, const std::vector<Transformer2> &transList, const std::vector<Generator> &geneList) : NodeNum(node_), myPool(maxThreadsNum)
+Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList) : NodeNum(node_), myPool(maxThreadsNum)
 {
     //omp_set_num_threads(std::thread::hardware_concurrency());
 
-    this->Y2 = this->Y0 = this->Y1 = Eigen::MatrixXcf::Zero(this->NodeNum, this->NodeNum);
+    this->Y2 = this->Y0 = this->Y1 = Eigen::SparseMatrix<cf>(this->NodeNum, this->NodeNum);
 
+    Grid::wrapper(lineData, this->SocketData1);
+    Grid::wrapper(nodeList, this->SocketData1);
+    Grid::wrapper(idealTransList, this->SocketData1);
+    Grid::wrapper(transList, this->SocketData1);
+    Grid::wrapper(geneList, this->SocketData1);
 
-    this->setYxFromSheet(data.lineData1, this->Y1, this->SocketData1);
-    //this->setYxFromSheet(data.lineData2, this->Y2, this->SocketData2);
-    //this->setYxFromSheet(data.lineData0, this->Y0, this->SocketData0);
+    TripVecType initList;
+    //initList.insert
+    for(const auto &iter: this->SocketData1)
+        initList.emplace_back(Eigen::Triplet<cf>(iter.first.first, iter.first.second, iter.second));
 
-    for(decltype(NodeList.size()) i = 0; i < NodeList.size(); i++){
-        const auto &curNodeTuple = NodeList.at(i);
-        const auto &node = std::get<0>(curNodeTuple) - 1;
-        const auto &Gs = std::get<1>(curNodeTuple);
-        const auto &Bs = std::get<2>(curNodeTuple);
-        this->Y1(node, node) += (Gs + Bs);
-    }
-    this->mountIdealTransformer2_PrimarySideReactance(idealTransformList);
-    //TODO:到这儿没问题，Z矩阵是可逆的
-    this->mountTransformer2(transList);
+    this->Y1.setFromTriplets(initList.begin(), initList.end());
 
+    //在这里做了对比试验，同样的数据集，采用稀疏矩阵也可以保证形成相同的Y矩阵
+    //std::cout << this->Y1.selfadjointView<Eigen::Lower>() << std::endl;
 
-    //TODO:这里有bug，导致Y矩阵变成inf啥的
-    this->mountGenerator(geneList);
+    Eigen::SparseMatrix<cf> E(this->Y1.rows(), this->Y1.cols());
+    E.setIdentity();
+    std::cout << E << std::endl;
+    Eigen::SparseLU<Eigen::SparseMatrix<cf>> solver;
+    //这里有bug: 比如(8, -3)翻到上面去就变成了(8, 3)导致Z矩阵计算错误
+	solver.compute(this->Y1.selfadjointView<Eigen::Lower>());
+    this->Z1 = solver.solve(E);
 
-    this->Z1 = this->Y1.inverse();
+    //std::cout << this->Z1 << std::endl;
     /*this->Z2 = this->Y2.inverse();
     this->Z0 = this->Y0.inverse();*/
 
@@ -37,46 +41,18 @@ Grid::~Grid()
 {
 }
 
-//通过数据集获得导纳矩阵
-void Grid::setYxFromSheet(const Eigen::MatrixXf &line_data_sheet, Eigen::MatrixXcf &Y, std::map<socketType, std::pair<cf, cf>> &socketData)
+void Grid::wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap)
 {
-    //dataSheet: https://img-blog.csdn.net/20180616204918263?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzMyNDEyNzU5/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70
-    //但是没有上面变压器变比那一列，因为大部分线路的变比都是1
-
-    const Eigen::VectorXi inNode = line_data_sheet.col(0).cast<int>().array();
-    const Eigen::VectorXi outNode = line_data_sheet.col(1).cast<int>().array();
-    const Eigen::VectorXcf Z = line_data_sheet.col(2) + Imaginer * line_data_sheet.col(3);
-    const Eigen::VectorXcf B = line_data_sheet.col(4) * Imaginer;
-
-    auto branchNum = inNode.size();
-    Eigen::VectorXcf y = Eigen::VectorXcf(branchNum).setOnes().array() / Z.array();
-
-    //#pragma omp parallel for
-    //多个线程对同一个容器同时写，线程不安全
-    for (decltype(branchNum) i = 0; i < branchNum; i++)
+//#pragma omp parallel for
+    for(decltype(triList.size()) i = 0; i < triList.size(); i++)
     {
-        //TODO: 应该完善直接接地的电抗
-        //如果两点最小的那个为零，说明这是一个节点接地电抗
-        /*if (std::min(inNode(i), outNode(i)) == 0)
-        {
-            const auto insertedNode = std::max(inNode(i), outNode(i)) - 1;
-            Y(insertedNode, insertedNode) += y(i);
-            continue;
-        }*/
-        const NodeType from = inNode(i) - 1, to = outNode(i) - 1;
-
-        Y(from, to) -= y(i);
-        Y(to, from) = Y(from, to);
-        Y(from, from) += y(i) + (B(i) / cf{2, 0});
-        Y(to, to) += y(i) + (B(i) / cf{2, 0});
-
-        const auto line_data_y_B = std::make_pair(y(i), B(i));
-        socketData.insert(
-            {{{inNode(i), outNode(i)}, line_data_y_B},
-             {{outNode(i), inNode(i)}, line_data_y_B}});
+        const auto &thisTriplet = triList.at(i);
+        const socketType &sock = {thisTriplet.row(), thisTriplet.col()};
+        if(sockMap.find(sock) == sockMap.end())
+            sockMap.insert({sock, thisTriplet.value()});
+        else
+            sockMap[sock] += thisTriplet.value();
     }
-
-    //std::cout << Y << std::endl;
 }
 
 //TODO:对称短路计算
@@ -88,26 +64,19 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
     Ui = Ui.array() - Z.array() * If;
     Ui(shortPoint - 1) = cf{0.0f, 0.0f};
 
-    std::set<socketType> pqNode{};
     std::list<std::pair<socketType, cf>> shortCurrent{};
 
     //TODO:这里把变压器当成了k=1的变压器，或者说根本没有变压器
-    const auto &sockData = this->SocketData1;
-    for (const auto &iter : sockData)
+    for (const auto &iter : this->SocketData1)
     {
         const auto &socket = iter.first;
-        //const auto sum = socket.first + socket.second;
-        if (pqNode.find(socket) != pqNode.end())
-            continue;
+        const auto &y = iter.second;
 
-        const auto &y = iter.second.first;
-
-        pqNode.insert(
-            {{socket.second, socket.first},
-             socket});
-
-        const auto Ipq = (Ui(socket.first - 1) - Ui(socket.second - 1)) * y;
-        shortCurrent.emplace_back(std::make_pair(socket, Ipq));
+        if(socket.first != socket.second)
+        {
+            const auto Ipq = (Ui(socket.first) - Ui(socket.second)) * y;
+            shortCurrent.emplace_back(std::make_pair(socket, Ipq));
+        }
     }
     return std::make_tuple(Ui, shortCurrent);
 }
@@ -200,20 +169,20 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
     std::map<std::pair<int, int>, std::tuple<cf, cf, cf>> Isx{};
 
     //#pragma omp parallel for
-    for (decltype(branchNum) i = 0; i < branchNum; i++)
+
+    using SpIterType = Eigen::SparseMatrix<cf>::InnerIterator;
+    for (decltype(this->Y1.outerSize()) k = 0; k < this->Y1.outerSize(); ++k)
     {
-        for (decltype(i) j = 1; j < i; j++)
-        {
-            std::pair<int, int> curSocket = std::make_pair(i, j);
-            cf Is1{0, 0}, Is2{0, 0}, Is0{0, 0};
-            if (std::abs(this->Y1(i, j)) > epsilon)
-                Is1 = -(U1(i) - U1(j)) * this->Y1(i, j);
-            if (std::abs(this->Y2(i, j)) > epsilon)
-                Is2 = -(U2(i) - U2(j)) * this->Y2(i, j);
-            if (std::abs(this->Y0(i, j)) > epsilon)
-                Is0 = -(U0(i) - U0(j)) * this->Y0(i, j);
+        cf Is1{0, 0}, Is2{0, 0}, Is0{0, 0};
+
+        for (SpIterType it1(this->Y1, k), it2(this->Y2, k), it0(this->Y0, k); it1 && it2 && it0; ++it1, ++it2, ++it0)
+		{
+            Is1 = -(U1(it1.row()) - U1(it1.col())) * it1.value();
+            Is2 = -(U2(it2.row()) - U2(it2.col())) * it2.value();
+            Is0 = -(U0(it0.row()) - U0(it0.col())) * it0.value();
+            const std::pair<int, int> &curSocket = std::make_pair(it0.row(), it0.col());
             Isx.insert({curSocket, {Is1, Is2, Is0}});
-        }
+		}
     }
 
     for (const auto &iter : Isx)
@@ -222,43 +191,6 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
         Eigen::MatrixXcf I = St * ((Eigen::MatrixXcf(3, 1) << std::get<0>(thisTuple), std::get<1>(thisTuple), std::get<2>(thisTuple)).finished());
         std::cout << "节点" << iter.first.first << "与节点" << iter.first.second << "间的abc相短路电流: " << std::endl;
         std::cout << I << std::endl;
-    }
-}
-
-void Grid::adjustIdealTransformer2_PrimarySideReactanceRatio(const std::vector<Transformer2> &transList)
-{
-#pragma omp parallel for
-    for (decltype(transList.size()) i = 0; i < transList.size(); i++)
-    {
-        const auto &transformer = transList.at(i);
-        const auto primaryNode = transformer.getPrimaryNode() - 1;
-        const auto secondNode = transformer.getSecondaryNode() - 1;
-        const auto k = transformer.getRatio();
-
-        const auto &y1 = this->SocketData1.find({transformer.getPrimaryNode(), transformer.getSecondaryNode()})->second.first;
-        const auto &y2 = this->SocketData2.find({transformer.getPrimaryNode(), transformer.getSecondaryNode()})->second.first;
-        const auto &y0 = this->SocketData0.find({transformer.getPrimaryNode(), transformer.getSecondaryNode()})->second.first;
-
-        const auto delta_Y1_tt = y1 / (k * k) - y1;
-        const auto delta_Y1_ft = y1 - y1 / k;
-
-        const auto delta_Y2_tt = y2 / (k * k) - y2;
-        const auto delta_Y2_ft = y2 - y2 / k;
-
-        const auto delta_Y0_tt = y0 / (k * k) - y0;
-        const auto delta_Y0_ft = y0 - y0 / k;
-
-        this->Y1(secondNode, secondNode) += delta_Y1_tt;
-        this->Y1(primaryNode, secondNode) += delta_Y1_ft;
-        this->Y1(secondNode, primaryNode) = this->Y1(primaryNode, secondNode);
-
-        this->Y2(secondNode, secondNode) += delta_Y2_tt;
-        this->Y2(primaryNode, secondNode) += delta_Y2_ft;
-        this->Y2(secondNode, primaryNode) = this->Y2(primaryNode, secondNode);
-
-        this->Y0(secondNode, secondNode) += delta_Y0_tt;
-        this->Y0(primaryNode, secondNode) += delta_Y0_ft;
-        this->Y0(secondNode, primaryNode) = this->Y0(primaryNode, secondNode);
     }
 }
 
@@ -294,56 +226,3 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
     return Eigen::MatrixXcf(0, 0);
 }
 
-void Grid::mountIdealTransformer2_PrimarySideReactance(const std::vector<std::pair<IdealTransformer2, cf>> &idealTransList)
-{
-    for (decltype(idealTransList.size()) i = 0; i < idealTransList.size(); i++)
-    {
-        const auto &thisTrans = idealTransList.at(i).first;
-        const auto y = cf{1, 0} / idealTransList.at(i).second;
-        const auto pNode = thisTrans.getPrimaryNode() - 1;
-        const auto qNode = thisTrans.getSecondaryNode() - 1;
-        const auto k = thisTrans.getRatio();
-
-        this->Y1(qNode, pNode) -= y / k;
-        this->Y1(pNode, qNode) = this->Y1(qNode, pNode);
-        this->Y1(pNode, pNode) += y;
-        this->Y1(qNode, qNode) += y / (k * k);
-
-        //TODO: 要不要+1
-        this->SocketData1.insert(
-            {{{pNode + 1, qNode + 1}, {y, cf(0.0f, 0.0f)}},
-             {{qNode + 1, pNode + 1}, {y, cf(0.0f, 0.0f)}}});
-    }
-}
-
-void Grid::mountTransformer2(const std::vector<Transformer2> &transList)
-{
-#pragma omp parallel for
-    for (decltype(transList.size()) i = 0; i < transList.size(); i++)
-    {
-        const auto &thisTrans = transList.at(i);
-        const auto y = cf{0, -1 / thisTrans.getXd()};
-        const auto pNode = thisTrans.getPrimaryNode() - 1;
-        const auto qNode = thisTrans.getSecondaryNode() - 1;
-
-        //TODO: 这里到底是+还是-
-        //this->Y1(qNode, pNode) += y;
-        this->Y1(qNode, pNode) -= y;
-        this->Y1(pNode, qNode) = this->Y1(qNode, pNode);
-        this->Y1(pNode, pNode) += y;
-        this->Y1(qNode, qNode) += y;
-    }
-}
-
-void Grid::mountGenerator(const std::vector<Generator> &geneList)
-{
-#pragma omp parallel for
-    for (decltype(geneList.size()) i = 0; i < geneList.size(); i++)
-    {
-        const auto &gene = geneList.at(i);
-        const auto node = gene.getNode() - 1;
-        const auto Xd = gene.getXd();
-        const auto y = (std::abs(Xd) > epsilon) ? (cf{1, 0} / gene.getXd()) : cf(0, 0);
-        this->Y1(node, node) += y;
-    }
-}

@@ -9,6 +9,7 @@
 #pragma once
 #include "Equipment.h"
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <cmath>
 #include <list>
 #include <map>
@@ -32,3 +33,5 @@ using ThreeSequenceData = struct ThreeSequenceData
     Eigen::MatrixXf lineData2;
     Eigen::MatrixXf lineData0;
 };
+
+using TripVecType = std::vector<Eigen::Triplet<cf>>;
