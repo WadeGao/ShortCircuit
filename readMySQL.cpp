@@ -27,14 +27,13 @@ std::vector<std::vector<DeviceArgType>> DataFetcher::getData(const std::string &
     std::vector<std::vector<float>> ret(std::get<0>(TableSize), std::vector(std::get<1>(TableSize), 0.00f));
     const DatabaseTableType &Data = this->db.ReadMySQL(query);
 
-#pragma omp parallel for
+    #pragma omp parallel for
     for (decltype(Data.size()) row = 0; row < Data.size(); row++)
     {
         const auto &curRowData = Data.at(row);
         for (decltype(curRowData.size()) col = 0; col < curRowData.size(); col++)
             ret[row][col] = atof(curRowData.at(col).c_str());
     }
-
     return ret;
 }
 
@@ -45,7 +44,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getLineTripletList()
     if(!Rows)    return {};
 
     std::vector<Eigen::Triplet<cf>> ret(3 * Rows, {0, 0, cf(0, 0)});
-#pragma omp parallel for
+    #pragma omp parallel for
     for(decltype(Rows) i = 0; i < Rows; i++)
     {
         const auto &curRow = rawData.at(i);
@@ -55,9 +54,9 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getLineTripletList()
         const auto &B = cf(0, curRow.at(4));
         const auto Y_self = y + B / cf(2, 0);
 
-        ret[3 * i] = Eigen::Triplet<cf>{std::max(from, to), std::min(from, to), cf(0, 0) - y};
-        ret[3 * i + 1] = Eigen::Triplet<cf>{from, from, Y_self};
-        ret[3 * i + 2] = Eigen::Triplet<cf>{to, to, Y_self};
+        ret[3 * i] = Eigen::Triplet<cf> {std::max(from, to), std::min(from, to), cf(0, 0) - y};
+        ret[3 * i + 1] = Eigen::Triplet<cf> {from, from, Y_self};
+        ret[3 * i + 2] = Eigen::Triplet<cf> {to, to, Y_self};
     }
     return ret;
 }
@@ -68,7 +67,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getIdealTransWithTripletReactanceLi
     if(!rawData.size())    return {};
     std::vector<Eigen::Triplet<cf>> ret(3 * rawData.size(), {0, 0, cf(0, 0)});
 
-#pragma omp parallel for
+    #pragma omp parallel for
     for (decltype(rawData.size()) i = 0; i < rawData.size(); i++)
     {
         const auto &curRow = rawData.at(i);
@@ -77,9 +76,9 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getIdealTransWithTripletReactanceLi
         const auto &k = curRow.at(4);
         const auto &y = cf{1, 0} / cf{curRow.at(2), curRow.at(3)};
 
-        ret[3 * i] = Eigen::Triplet<cf>{std::max(pNode, qNode), std::min(pNode, qNode), cf(0, 0) - y / k};
-        ret[3 * i + 1] = Eigen::Triplet<cf>{pNode, pNode, y};
-        ret[3 * i + 2] = Eigen::Triplet<cf>{qNode, qNode, y / (k * k)};
+        ret[3 * i] = Eigen::Triplet<cf> {std::max(pNode, qNode), std::min(pNode, qNode), cf(0, 0) - y / k};
+        ret[3 * i + 1] = Eigen::Triplet<cf> {pNode, pNode, y};
+        ret[3 * i + 2] = Eigen::Triplet<cf> {qNode, qNode, y / (k * k)};
 
     }
     return ret;
@@ -106,8 +105,9 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getGeneratorTripletList(const Devic
     if(!rawData.size())    return {};
     std::vector<Eigen::Triplet<cf>> ret(rawData.size(), {0, 0, cf(0, 0)});
 
-#pragma omp parallel for
-    for (decltype(ret.size()) i = 0; i < ret.size(); i++){
+    #pragma omp parallel for
+    for (decltype(ret.size()) i = 0; i < ret.size(); i++)
+    {
         const auto &curRowData = rawData.at(i);
         // Node(Node_), Sn(Sn_), xd_(__xd), Xd(__xd * SB_ / Sn_)
         const NodeType node = curRowData.at(0) - 1;
@@ -115,23 +115,24 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getGeneratorTripletList(const Devic
         const auto __xd = cf(0.0f, 0.0f);
         const auto Xd = __xd * SB / Sn;
         const auto y = (std::abs(Xd) > epsilon) ? (cf{1, 0} / Xd) : cf(0, 0);
-        ret[i] = Eigen::Triplet<cf>{node, node, y};
+        ret[i] = Eigen::Triplet<cf> {node, node, y};
     }
-
     return ret;
 }
 
 std::vector<Eigen::Triplet<cf>> DataFetcher::getNodeTripletList()
 {
-    const auto rawData = this->getData(queryNode);
+    const auto &rawData = this->getData(queryNode);
     if(!rawData.size())    return {};
     std::vector<Eigen::Triplet<cf>> ret(rawData.size(), {0, 0, cf(0, 0)});
-#pragma omp parallel for
-    for (decltype(ret.size()) i = 0; i < ret.size(); i++){
+
+    #pragma omp parallel for
+    for (decltype(ret.size()) i = 0; i < ret.size(); i++)
+    {
         const auto &curRowData = rawData.at(i);
         const NodeType &node = curRowData.at(0);
         const auto Gs_add_Bs = cf(0.0f, curRowData.at(1) + curRowData.at(2));
-        ret[i] = Eigen::Triplet<cf>{node, node, Gs_add_Bs};
+        ret[i] = Eigen::Triplet<cf> {node, node, Gs_add_Bs};
     }
     return ret;
 }

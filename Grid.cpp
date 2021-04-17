@@ -4,7 +4,6 @@
 Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList) : NodeNum(node_), myPool(maxThreadsNum)
 {
     //omp_set_num_threads(std::thread::hardware_concurrency());
-
     this->Y2 = this->Y0 = this->Y1 = Eigen::SparseMatrix<cf>(this->NodeNum, this->NodeNum);
 
     Grid::wrapper(lineData, this->SocketData1);
@@ -15,10 +14,10 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
 
     {
         std::list<Eigen::Triplet<cf>> initList{};
-        //initList.insert
         for(const auto &iter: this->SocketData1)
         {
             const auto &sock = iter.first;
+            //不这么搞，就(8, 3) -> (8, -3)
             if(sock.first == sock.second)
                 initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
             else
@@ -27,24 +26,16 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
                 initList.emplace_back(Eigen::Triplet<cf>(sock.second, sock.first, iter.second));
             }
         }
-
-
         //在这里做了对比试验，同样的数据集，采用稀疏矩阵也可以保证形成与密集情况下相同的Y矩阵
         this->Y1.setFromTriplets(initList.begin(), initList.end());
-        //std::cout << this->Y1 << std::endl;
     }
 
     Eigen::SparseMatrix<cf> E(this->Y1.rows(), this->Y1.cols());
     E.setIdentity();
-
     Eigen::SparseLU<Eigen::SparseMatrix<cf>> solver;
-    //这里有bug: 比如(8, -3)翻到上面去就变成了(8, 3)导致Z矩阵计算错误
-	solver.compute(this->Y1);
-
-	//这里，通过大量的对比试验。表面密集矩阵的inverse()方法不精确。下面的语句是精确的求逆方法。
+    solver.compute(this->Y1);
+    //这里，通过大量的对比试验。证明密集矩阵的inverse()方法不精确。下面的语句是精确的求逆方法。
     this->Z1 = solver.solve(E);
-
-    //std::cout << this->Z1 << std::endl;
     /*this->Z2 = this->Y2.inverse();
     this->Z0 = this->Y0.inverse();*/
 
@@ -167,7 +158,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
     auto U2{U1}, U0{U1};
     Eigen::MatrixXf Uabc = Eigen::MatrixXf(branchNum, 3);
 
-#pragma omp parallel for
+    #pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
         U1(i) = cf{1, 0} - this->Z1(faultNode - 1, i) * If(0);
@@ -189,13 +180,13 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
         cf Is1{0, 0}, Is2{0, 0}, Is0{0, 0};
 
         for (SpIterType it1(this->Y1, k), it2(this->Y2, k), it0(this->Y0, k); it1 && it2 && it0; ++it1, ++it2, ++it0)
-		{
+        {
             Is1 = -(U1(it1.row()) - U1(it1.col())) * it1.value();
             Is2 = -(U2(it2.row()) - U2(it2.col())) * it2.value();
             Is0 = -(U0(it0.row()) - U0(it0.col())) * it0.value();
             const std::pair<int, int> &curSocket = std::make_pair(it0.row(), it0.col());
             Isx.insert({curSocket, {Is1, Is2, Is0}});
-		}
+        }
     }
 
     for (const auto &iter : Isx)

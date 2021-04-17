@@ -13,7 +13,7 @@ Database::~Database()
 
 bool Database::ConnectMySQL(const char *host, const char *user, const char *db, unsigned int port)
 {
-    char pwd[32]{0};
+    char pwd[32] {0};
     uint8_t failedTimes = 0;
     while (true)
     {
@@ -72,7 +72,7 @@ DatabaseTableType Database::ReadMySQL(const std::string &query)
     std::vector<std::vector<std::string>> res(row_count, std::vector<std::string>(field_count, ""));
     while ((row = mysql_fetch_row(result)))
     {
-#pragma omp parallel for
+        #pragma omp parallel for
         for (decltype(field_count) i = 0; i < field_count; i++)
             res[cur_line][i] = row[i];
         cur_line++;
