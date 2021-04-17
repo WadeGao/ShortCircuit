@@ -35,9 +35,8 @@ int main()
     std::cout << "各点电流分布: " << std::endl;
     const auto &I_list = std::get<1>(ret);
     for(const auto &iter : I_list)
-    {
         std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: " << std::abs(iter.second)  << std::endl;
-    }
+
     return 0;
 }
 /*

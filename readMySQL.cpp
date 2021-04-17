@@ -17,7 +17,7 @@ DataFetcher::DataFetcher(const char *host, const char *user, const char *db, uns
     }
 }
 
-std::vector<std::vector<float>> DataFetcher::getData(const std::string &query)
+std::vector<std::vector<DeviceArgType>> DataFetcher::getData(const std::string &query)
 {
     const auto &TableSize = this->db.getQuerySize(query);
     //TODO: 这里，只要矩阵维度参数有一个是0，就不行，我已经定位问题了
@@ -50,7 +50,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getLineTripletList()
     {
         const auto &curRow = rawData.at(i);
 
-        const int from = curRow.at(0) - 1, to = curRow.at(1) - 1;
+        const NodeType from = curRow.at(0) - 1, to = curRow.at(1) - 1;
         const auto &y = (cf(1, 0) / cf(curRow.at(2), curRow.at(3)));
         const auto &B = cf(0, curRow.at(4));
         const auto Y_self = y + B / cf(2, 0);
@@ -73,7 +73,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getIdealTransWithTripletReactanceLi
     {
         const auto &curRow = rawData.at(i);
 
-        const int pNode = curRow.at(0) - 1, qNode = curRow.at(1) - 1;
+        const NodeType pNode = curRow.at(0) - 1, qNode = curRow.at(1) - 1;
         const auto &k = curRow.at(4);
         const auto &y = cf{1, 0} / cf{curRow.at(2), curRow.at(3)};
 
@@ -110,7 +110,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getGeneratorTripletList(const Devic
     for (decltype(ret.size()) i = 0; i < ret.size(); i++){
         const auto &curRowData = rawData.at(i);
         // Node(Node_), Sn(Sn_), xd_(__xd), Xd(__xd * SB_ / Sn_)
-        const int node = curRowData.at(0) - 1;
+        const NodeType node = curRowData.at(0) - 1;
         const auto Sn = std::abs(cf(curRowData.at(1), curRowData.at(2)));
         const auto __xd = cf(0.0f, 0.0f);
         const auto Xd = __xd * SB / Sn;
@@ -129,7 +129,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getNodeTripletList()
 #pragma omp parallel for
     for (decltype(ret.size()) i = 0; i < ret.size(); i++){
         const auto &curRowData = rawData.at(i);
-        const int &node = curRowData.at(0);
+        const NodeType &node = curRowData.at(0);
         const auto Gs_add_Bs = cf(0.0f, curRowData.at(1) + curRowData.at(2));
         ret[i] = Eigen::Triplet<cf>{node, node, Gs_add_Bs};
     }

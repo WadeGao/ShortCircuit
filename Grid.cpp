@@ -13,22 +13,35 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
     Grid::wrapper(transList, this->SocketData1);
     Grid::wrapper(geneList, this->SocketData1);
 
-    TripVecType initList;
-    //initList.insert
-    for(const auto &iter: this->SocketData1)
-        initList.emplace_back(Eigen::Triplet<cf>(iter.first.first, iter.first.second, iter.second));
+    {
+        std::list<Eigen::Triplet<cf>> initList{};
+        //initList.insert
+        for(const auto &iter: this->SocketData1)
+        {
+            const auto &sock = iter.first;
+            if(sock.first == sock.second)
+                initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
+            else
+            {
+                initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
+                initList.emplace_back(Eigen::Triplet<cf>(sock.second, sock.first, iter.second));
+            }
+        }
 
-    this->Y1.setFromTriplets(initList.begin(), initList.end());
 
-    //在这里做了对比试验，同样的数据集，采用稀疏矩阵也可以保证形成相同的Y矩阵
-    //std::cout << this->Y1.selfadjointView<Eigen::Lower>() << std::endl;
+        //在这里做了对比试验，同样的数据集，采用稀疏矩阵也可以保证形成与密集情况下相同的Y矩阵
+        this->Y1.setFromTriplets(initList.begin(), initList.end());
+        //std::cout << this->Y1 << std::endl;
+    }
 
     Eigen::SparseMatrix<cf> E(this->Y1.rows(), this->Y1.cols());
     E.setIdentity();
-    std::cout << E << std::endl;
+
     Eigen::SparseLU<Eigen::SparseMatrix<cf>> solver;
     //这里有bug: 比如(8, -3)翻到上面去就变成了(8, 3)导致Z矩阵计算错误
-	solver.compute(this->Y1.selfadjointView<Eigen::Lower>());
+	solver.compute(this->Y1);
+
+	//这里，通过大量的对比试验。表面密集矩阵的inverse()方法不精确。下面的语句是精确的求逆方法。
     this->Z1 = solver.solve(E);
 
     //std::cout << this->Z1 << std::endl;
