@@ -19,23 +19,24 @@
 
 int main()
 {
-    DataFetcher util("wadegao.tpddns.net", "root", "IEEE14");
+    DataFetcher util("wadegao.tpddns.net", "root", "IEEE300");
     const auto &LineData = util.getLineTripletList();
     const auto &IdealTransformer2Data = util.getIdealTransWithTripletReactanceList();
     //const auto &Transformer2Data = util.getTransformer2List(120);
     const auto &GeneratorData = util.getGeneratorTripletList(120);
     const auto &NodeData = util.getNodeTripletList();
 
-    Grid my_grid(14, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
+    Grid my_grid(300, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
 
-    const auto ret = my_grid.SymmetricShortCircuit(3, cf(0.0f, 0.0f), 1);
+    const auto ret = my_grid.SymmetricShortCircuit(13, cf(0.0f, 0.0f), 1);
 
     std::cout << "各点电压分布: " << std::endl << std::get<0>(ret) << std::endl << std::endl;
 
     std::cout << "各点电流分布: " << std::endl;
     const auto &I_list = std::get<1>(ret);
     for(const auto &iter : I_list)
-        std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: " << std::abs(iter.second)  << std::endl;
+        //std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: " << std::abs(iter.second)  << std::endl;
+        std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: (" << iter.second.real() << ", " << iter.second.imag() << ")"  << std::endl;
 
     return 0;
 }

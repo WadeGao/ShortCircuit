@@ -17,14 +17,11 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
         for(const auto &iter: this->SocketData1)
         {
             const auto &sock = iter.first;
+            initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
             //不这么搞，就(8, 3) -> (8, -3)
-            if(sock.first == sock.second)
-                initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
-            else
-            {
-                initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
+            if(sock.first != sock.second)
                 initList.emplace_back(Eigen::Triplet<cf>(sock.second, sock.first, iter.second));
-            }
+            //std::cout << sock.first << "<---->" << sock.second << std::endl;
         }
         //在这里做了对比试验，同样的数据集，采用稀疏矩阵也可以保证形成与密集情况下相同的Y矩阵
         this->Y1.setFromTriplets(initList.begin(), initList.end());
@@ -36,6 +33,9 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
     solver.compute(this->Y1);
     //这里，通过大量的对比试验。证明密集矩阵的inverse()方法不精确。下面的语句是精确的求逆方法。
     this->Z1 = solver.solve(E);
+
+    /*std::cout << this->Y1 << std::endl << std::endl << std::endl;
+    std::cout << this->Z1 << std::endl << std::endl << std::endl;*/
     /*this->Z2 = this->Y2.inverse();
     this->Z0 = this->Y0.inverse();*/
 
@@ -52,6 +52,7 @@ void Grid::wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap
     {
         const auto &thisTriplet = triList.at(i);
         const socketType &sock = {thisTriplet.row(), thisTriplet.col()};
+        //std::cout << sock.first << "<---->" << sock.second << std::endl;
         if(sockMap.find(sock) == sockMap.end())
             sockMap.insert({sock, thisTriplet.value()});
         else

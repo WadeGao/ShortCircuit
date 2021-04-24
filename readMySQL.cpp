@@ -44,7 +44,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getLineTripletList()
     if(!Rows)    return {};
 
     std::vector<Eigen::Triplet<cf>> ret(3 * Rows, {0, 0, cf(0, 0)});
-    #pragma omp parallel for
+#pragma omp parallel for
     for(decltype(Rows) i = 0; i < Rows; i++)
     {
         const auto &curRow = rawData.at(i);
@@ -67,7 +67,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getIdealTransWithTripletReactanceLi
     if(!rawData.size())    return {};
     std::vector<Eigen::Triplet<cf>> ret(3 * rawData.size(), {0, 0, cf(0, 0)});
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (decltype(rawData.size()) i = 0; i < rawData.size(); i++)
     {
         const auto &curRow = rawData.at(i);
@@ -130,7 +130,7 @@ std::vector<Eigen::Triplet<cf>> DataFetcher::getNodeTripletList()
     for (decltype(ret.size()) i = 0; i < ret.size(); i++)
     {
         const auto &curRowData = rawData.at(i);
-        const NodeType &node = curRowData.at(0);
+        const NodeType &node = curRowData.at(0) - 1;
         const auto Gs_add_Bs = cf(0.0f, curRowData.at(1) + curRowData.at(2));
         ret[i] = Eigen::Triplet<cf> {node, node, Gs_add_Bs};
     }
