@@ -1,0 +1,3 @@
+/home/wade/Desktop/ShortCircuit/build/CMakeFiles/rebuild_cache.dir
+/home/wade/Desktop/ShortCircuit/build/CMakeFiles/edit_cache.dir
+/home/wade/Desktop/ShortCircuit/build/CMakeFiles/ShortCircuit.dir

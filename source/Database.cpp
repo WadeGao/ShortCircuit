@@ -1,3 +1,11 @@
+/*
+ * @Author: your name
+ * @Date: 2021-04-25 21:59:06
+ * @LastEditTime: 2021-04-25 22:16:27
+ * @LastEditors: your name
+ * @Description: In User Settings Edit
+ * @FilePath: /ShortCircuit/source/Database.cpp
+ */
 #include "Database.h"
 
 Database::Database()
@@ -13,7 +21,7 @@ Database::~Database()
 
 bool Database::ConnectMySQL(const char *host, const char *user, const char *db, unsigned int port)
 {
-    char pwd[32] {0};
+    char pwd[32]{0};
     uint8_t failedTimes = 0;
     while (true)
     {
@@ -24,9 +32,11 @@ bool Database::ConnectMySQL(const char *host, const char *user, const char *db, 
         if (!mysql_real_connect(&this->mysql, host, user, pwd, db, port, nullptr, CLIENT_FOUND_ROWS))
         {
             fprintf(stderr, "Connection Failed: %s\n\n", mysql_error(&this->mysql));
-            if (++failedTimes >= 3)    return false;
+            if (++failedTimes >= 3)
+                return false;
         }
-        else    break;
+        else
+            break;
     }
     return true;
 }
@@ -72,7 +82,7 @@ DatabaseTableType Database::ReadMySQL(const std::string &query)
     std::vector<std::vector<std::string>> res(row_count, std::vector<std::string>(field_count, ""));
     while ((row = mysql_fetch_row(result)))
     {
-        #pragma omp parallel for
+#pragma omp parallel for
         for (decltype(field_count) i = 0; i < field_count; i++)
             res[cur_line][i] = row[i];
         cur_line++;

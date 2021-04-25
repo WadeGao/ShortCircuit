@@ -14,12 +14,12 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
 
     {
         std::list<Eigen::Triplet<cf>> initList{};
-        for(const auto &iter: this->SocketData1)
+        for (const auto &iter : this->SocketData1)
         {
             const auto &sock = iter.first;
             initList.emplace_back(Eigen::Triplet<cf>(sock.first, sock.second, iter.second));
             //不这么搞，就(8, 3) -> (8, -3)
-            if(sock.first != sock.second)
+            if (sock.first != sock.second)
                 initList.emplace_back(Eigen::Triplet<cf>(sock.second, sock.first, iter.second));
             //std::cout << sock.first << "<---->" << sock.second << std::endl;
         }
@@ -38,7 +38,6 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
     std::cout << this->Z1 << std::endl << std::endl << std::endl;*/
     /*this->Z2 = this->Y2.inverse();
     this->Z0 = this->Y0.inverse();*/
-
 }
 
 Grid::~Grid()
@@ -47,13 +46,13 @@ Grid::~Grid()
 
 void Grid::wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap)
 {
-//#pragma omp parallel for
-    for(decltype(triList.size()) i = 0; i < triList.size(); i++)
+    //#pragma omp parallel for
+    for (decltype(triList.size()) i = 0; i < triList.size(); i++)
     {
         const auto &thisTriplet = triList.at(i);
         const socketType &sock = {thisTriplet.row(), thisTriplet.col()};
         //std::cout << sock.first << "<---->" << sock.second << std::endl;
-        if(sockMap.find(sock) == sockMap.end())
+        if (sockMap.find(sock) == sockMap.end())
             sockMap.insert({sock, thisTriplet.value()});
         else
             sockMap[sock] += thisTriplet.value();
@@ -77,7 +76,7 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
         const auto &socket = iter.first;
         const auto &y = iter.second;
 
-        if(socket.first != socket.second)
+        if (socket.first != socket.second)
         {
             const auto Ipq = (Ui(socket.first) - Ui(socket.second)) * y;
             shortCurrent.emplace_back(std::make_pair(socket, Ipq));
@@ -159,7 +158,7 @@ void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType fa
     auto U2{U1}, U0{U1};
     Eigen::MatrixXf Uabc = Eigen::MatrixXf(branchNum, 3);
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
         U1(i) = cf{1, 0} - this->Z1(faultNode - 1, i) * If(0);
@@ -230,4 +229,3 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
     }
     return Eigen::MatrixXcf(0, 0);
 }
-
