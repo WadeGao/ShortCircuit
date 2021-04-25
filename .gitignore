@@ -1,4 +1,2 @@
-Debug/
-x64/
-.vs/
-DataSet/
+build/
+bin/
