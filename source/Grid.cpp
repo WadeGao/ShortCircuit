@@ -1,10 +1,10 @@
 #include "Grid.h"
 #include <iostream>
 
-Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList) : NodeNum(node_), myPool(maxThreadsNum)
+Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList) : NodeNum(node_) //, myPool(maxThreadsNum)
 {
     //omp_set_num_threads(std::thread::hardware_concurrency());
-    this->Y2 = this->Y0 = this->Y1 = Eigen::SparseMatrix<cf>(this->NodeNum, this->NodeNum);
+    this->Y2 = this->Y0 = this->Y1 = Eigen::SparseMatrix<cf>(node_, node_);
 
     Grid::wrapper(lineData, this->SocketData1);
     Grid::wrapper(nodeList, this->SocketData1);
@@ -21,23 +21,19 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
             //不这么搞，就(8, 3) -> (8, -3)
             if (sock.first != sock.second)
                 initList.emplace_back(Eigen::Triplet<cf>(sock.second, sock.first, iter.second));
-            //std::cout << sock.first << "<---->" << sock.second << std::endl;
         }
         //在这里做了对比试验，同样的数据集，采用稀疏矩阵也可以保证形成与密集情况下相同的Y矩阵
         this->Y1.setFromTriplets(initList.begin(), initList.end());
+        this->Y2 = this->Y1;
     }
 
-    Eigen::SparseMatrix<cf> E(this->Y1.rows(), this->Y1.cols());
+    Eigen::SparseMatrix<cf> E(node_, node_);
     E.setIdentity();
     Eigen::SparseLU<Eigen::SparseMatrix<cf>> solver;
     solver.compute(this->Y1);
-    //这里，通过大量的对比试验。证明密集矩阵的inverse()方法不精确。下面的语句是精确的求逆方法。
-    this->Z1 = solver.solve(E);
-
-    /*std::cout << this->Y1 << std::endl << std::endl << std::endl;
-    std::cout << this->Z1 << std::endl << std::endl << std::endl;*/
-    /*this->Z2 = this->Y2.inverse();
-    this->Z0 = this->Y0.inverse();*/
+    //这里，通过大量的对比试验。证明密集矩阵的inverse()方法不精确
+    //下面的语句是精确的求逆方法。
+    this->Z2 = this->Z1 = solver.solve(E);
 }
 
 Grid::~Grid()
@@ -51,7 +47,6 @@ void Grid::wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap
     {
         const auto &thisTriplet = triList.at(i);
         const socketType &sock = {thisTriplet.row(), thisTriplet.col()};
-        //std::cout << sock.first << "<---->" << sock.second << std::endl;
         if (sockMap.find(sock) == sockMap.end())
             sockMap.insert({sock, thisTriplet.value()});
         else
@@ -60,7 +55,7 @@ void Grid::wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap
 }
 
 //TODO:对称短路计算
-std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf, const DeviceArgType Uav)
+lllReturnType Grid::SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf, const DeviceArgType Uav)
 {
     const Eigen::VectorXcf &Z = this->Z1.col(shortPoint - 1);
     Eigen::VectorXcf Ui = Eigen::VectorXcf(this->NodeNum).setOnes();
@@ -82,7 +77,7 @@ std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> Grid::Symmetr
             shortCurrent.emplace_back(std::make_pair(socket, Ipq));
         }
     }
-    return std::make_tuple(Ui, shortCurrent);
+    return lllReturnType(Ui, shortCurrent); //std::make_tuple(Ui, shortCurrent);
 }
 
 //单相短路计算

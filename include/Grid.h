@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2021-04-08 19:08:26
- * @LastEditTime: 2021-04-11 21:56:03
+ * @LastEditTime: 2021-04-26 09:48:05
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/Grid.h
@@ -19,11 +19,13 @@ enum class SEQUENCE
     ZERO
 };
 
+using lllReturnType = std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>>;
+
 class Grid
 {
 private:
     NodeType NodeNum{0};
-    ThreadPool myPool;
+    //ThreadPool myPool;
     Eigen::MatrixXcf Z1, Z2, Z0;
     Eigen::SparseMatrix<cf> Y1, Y2, Y0;
     //socket->Y
@@ -39,7 +41,7 @@ public:
     Eigen::MatrixXcf getYx(const SEQUENCE whichSeq) const;
     Eigen::MatrixXcf getZx(const SEQUENCE whichSeq) const;
 
-    std::tuple<Eigen::VectorXcf, std::list<std::pair<socketType, cf>>> SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf, const DeviceArgType Uav);
+    lllReturnType SymmetricShortCircuit(const NodeType shortPoint, const cf &Zf, const DeviceArgType Uav);
 
     void lgShortCircuit(const NodeType faultNode, const cf &Zf);
 

@@ -1,7 +1,7 @@
 ﻿/*
  * @Author: your name
  * @Date: 2021-04-08 19:54:54
- * @LastEditTime: 2021-04-11 21:56:56
+ * @LastEditTime: 2021-04-26 09:53:06
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/ShortCircuit.cpp
@@ -19,7 +19,7 @@
 
 int main()
 {
-    DataFetcher util("wadegao.tpddns.net", "root", "IEEE300");
+    DataFetcher util("wadegao.tpddns.cn", "root", "IEEE300");
     const auto &LineData = util.getLineTripletList();
     const auto &IdealTransformer2Data = util.getIdealTransWithTripletReactanceList();
     //const auto &Transformer2Data = util.getTransformer2List(120);
@@ -29,17 +29,29 @@ int main()
     Grid my_grid(300, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
 
     const auto ret = my_grid.SymmetricShortCircuit(13, cf(0.0f, 0.0f), 1);
+    auto task = [&my_grid](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return my_grid.SymmetricShortCircuit(node, z, u); };
 
-    std::cout << "各点电压分布: " << std::endl
-              << std::get<0>(ret) << std::endl
-              << std::endl;
+    ThreadPool myPool(std::thread::hardware_concurrency());
 
-    std::cout << "各点电流分布: " << std::endl;
-    const auto &I_list = std::get<1>(ret);
-    for (const auto &iter : I_list)
-        //std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: " << std::abs(iter.second)  << std::endl;
-        std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: (" << iter.second.real() << ", " << iter.second.imag() << ")" << std::endl;
+    std::vector<std::future<lllReturnType>> results;
 
+    for (int i = 1; i <= 300; i++)
+        results.emplace_back(myPool.enqueue(task, i, cf(0.0f, 0.0f), 1));
+
+    for (auto &&result : results)
+    {
+        auto ret = result.get();
+        std::cout
+            << "各点电压分布: " << std::endl
+            << std::get<0>(ret) << std::endl
+            << std::endl;
+
+        std::cout << "各点电流分布: " << std::endl;
+        const auto &I_list = std::get<1>(ret);
+        for (const auto &iter : I_list)
+            //std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: " << std::abs(iter.second)  << std::endl;
+            std::cout << "I[" << iter.first.first + 1 << "][" << iter.first.second + 1 << "]: (" << iter.second.real() << ", " << iter.second.imag() << ")" << std::endl;
+    }
     return 0;
 }
 /*
