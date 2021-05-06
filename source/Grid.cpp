@@ -1,7 +1,7 @@
 #include "Grid.h"
 #include <iostream>
 
-Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList) : NodeNum(node_) //, myPool(maxThreadsNum)
+Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType &nodeList, const TripVecType &idealTransList, const TripVecType &transList, const TripVecType &geneList) : NodeNum(node_), myPool(maxThreadsNum)
 {
     //omp_set_num_threads(std::thread::hardware_concurrency());
     this->Y2 = this->Y0 = this->Y1 = Eigen::SparseMatrix<cf>(node_, node_);
@@ -99,7 +99,7 @@ void Grid::lgShortCircuit(const NodeType faultNode, const cf &Zf)
     const auto Is = If_abc(0);
     std::cout << "故障电流: " << Is << std::endl;
 
-    this->getBusVoltageAndCurrent(If, faultNode);
+    //this->getBusVoltageAndCurrent(If, faultNode);
 }
 
 //两相短路计算
@@ -120,7 +120,7 @@ void Grid::llShortCircuit(const NodeType faultNode, const cf &Zf)
     const auto Is = If_abc(2);
     std::cout << "故障电流: " << Is << std::endl;
 
-    this->getBusVoltageAndCurrent(If, faultNode);
+    //this->getBusVoltageAndCurrent(If, faultNode);
 }
 
 //两相对地短路计算
@@ -143,54 +143,115 @@ void Grid::llgShortCircuit(const NodeType faultNode, const cf &Zf)
     const auto Is = If_abc(1) + If_abc(2);
     std::cout << "故障电流: " << Is << std::endl;
 
-    this->getBusVoltageAndCurrent(If, faultNode);
+    //this->getBusVoltageAndCurrent(If, faultNode);
 }
 
-void Grid::getBusVoltageAndCurrent(const Eigen::VectorXcf &If, const NodeType faultNode)
+SequenceVoltType Grid::getSequenceVolt(const Eigen::VectorXcf &If, const NodeType faultNode)
 {
     auto branchNum = this->Y1.rows();
     Eigen::MatrixXcf U1 = Eigen::MatrixXcf(branchNum, 1);
     auto U2{U1}, U0{U1};
-    Eigen::MatrixXf Uabc = Eigen::MatrixXf(branchNum, 3);
-
 #pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
     {
         U1(i) = cf{1, 0} - this->Z1(faultNode - 1, i) * If(0);
         U2(i) = -(this->Z2(faultNode - 1, i) * If(1));
         U0(i) = -(this->Z0(faultNode - 1, i) * If(2));
-        Uabc.row(i) = (St * ((Eigen::MatrixXcf(3, 1) << U1(i), U2(i), U0(i)).finished())).cwiseAbs();
     }
 
+    return {U1, U2, U0};
+}
+
+Eigen::MatrixXf Grid::getBusVoltage(const Eigen::VectorXcf &If, const NodeType faultNode)
+{
+    const auto &seqVolt = this->getSequenceVolt(If, faultNode);
+    auto branchNum = this->Y1.rows();
+    Eigen::MatrixXf Uabc = Eigen::MatrixXf(branchNum, 3);
+    auto &U1 = std::get<0>(seqVolt), &U2 = std::get<1>(seqVolt), &U0 = std::get<2>(seqVolt);
+
+#pragma omp parallel for
     for (decltype(branchNum) i = 0; i < branchNum; i++)
-        std::cout << "节点" << i + 1 << "的abc相短路电压: " << Uabc.row(i) << std::endl;
+        Uabc.row(i) = (St * ((Eigen::MatrixXcf(3, 1) << U1(i), U2(i), U0(i)).finished())).cwiseAbs();
 
-    std::map<std::pair<int, int>, std::tuple<cf, cf, cf>> Isx{};
+    /*for (decltype(branchNum) i = 0; i < branchNum; i++)
+        std::cout << "节点" << i + 1 << "的abc相短路电压: " << Uabc.row(i) << std::endl;*/
+    return Uabc;
+}
 
-    //#pragma omp parallel for
+SequenceCurrentType Grid::getBusCurrent(const Eigen::VectorXcf &If, const NodeType faultNode)
+{
+    auto branchNum = this->Y1.rows();
+    const auto &seqVolt = this->getSequenceVolt(If, faultNode);
+    auto &U1 = std::get<0>(seqVolt), &U2 = std::get<1>(seqVolt), &U0 = std::get<2>(seqVolt);
+
+    std::map<std::pair<int, int>, cf> Ib1{}, Ib2{}, Ib0{};
 
     using SpIterType = Eigen::SparseMatrix<cf>::InnerIterator;
-    for (decltype(this->Y1.outerSize()) k = 0; k < this->Y1.outerSize(); ++k)
-    {
-        cf Is1{0, 0}, Is2{0, 0}, Is0{0, 0};
 
-        for (SpIterType it1(this->Y1, k), it2(this->Y2, k), it0(this->Y0, k); it1 && it2 && it0; ++it1, ++it2, ++it0)
-        {
-            Is1 = -(U1(it1.row()) - U1(it1.col())) * it1.value();
-            Is2 = -(U2(it2.row()) - U2(it2.col())) * it2.value();
-            Is0 = -(U0(it0.row()) - U0(it0.col())) * it0.value();
-            const std::pair<int, int> &curSocket = std::make_pair(it0.row(), it0.col());
-            Isx.insert({curSocket, {Is1, Is2, Is0}});
-        }
+    auto task1 = [&Ib1, &U1, this]() -> void {
+        for (decltype(this->Y1.outerSize()) k = 0; k < this->Y1.outerSize(); ++k)
+            for (SpIterType it1(this->Y1, k); it1; ++it1)
+                Ib1.insert({{it1.row(), it1.col()}, -(U1(it1.row()) - U1(it1.col())) * it1.value()});
+    };
+    auto task2 = [&Ib2, &U2, this]() -> void {
+        for (decltype(this->Y2.outerSize()) k = 0; k < this->Y2.outerSize(); ++k)
+            for (SpIterType it2(this->Y1, k); it2; ++it2)
+                Ib2.insert({{it2.row(), it2.col()}, -(U2(it2.row()) - U2(it2.col())) * it2.value()});
+    };
+    auto task0 = [&Ib0, &U0, this]() -> void {
+        for (decltype(this->Y0.outerSize()) k = 0; k < this->Y0.outerSize(); ++k)
+            for (SpIterType it0(this->Y0, k); it0; ++it0)
+                Ib0.insert({{it0.row(), it0.col()}, -(U0(it0.row()) - U0(it0.col())) * it0.value()});
+    };
+
+    std::thread calcIbx[3]{std::thread(task0), std::thread(task1), std::thread(task2)};
+    for (auto &th : calcIbx)
+        th.join();
+
+    SequenceCurrentType Isx{};
+
+    for (const auto &iter1 : Ib1)
+    {
+        std::vector<cf> ins(3, cf{0, 0});
+        ins.at(0) = iter1.second;
+        Isx.insert({iter1.first, ins});
     }
 
+    for (const auto &iter2 : Ib2)
+    {
+        if (Isx.find(iter2.first) == Isx.end())
+        {
+            std::vector<cf> ins(3, cf{0, 0});
+            ins.at(1) = iter2.second;
+            Isx.insert({iter2.first, ins});
+        }
+        else
+            Isx[iter2.first].at(1) = iter2.second;
+    }
+
+    for (const auto &iter0 : Ib0)
+    {
+        if (Isx.find(iter0.first) == Isx.end())
+        {
+            std::vector<cf> ins(3, cf{0, 0});
+            ins.at(2) = iter0.second;
+            Isx.insert({iter0.first, ins});
+        }
+        else
+            Isx[iter0.first].at(2) = iter0.second;
+    }
+
+    /*
     for (const auto &iter : Isx)
     {
         const auto &thisTuple = iter.second;
-        Eigen::MatrixXcf I = St * ((Eigen::MatrixXcf(3, 1) << std::get<0>(thisTuple), std::get<1>(thisTuple), std::get<2>(thisTuple)).finished());
+        Eigen::MatrixXcf I = St * ((Eigen::MatrixXcf(3, 1) << thisTuple.at(0), thisTuple.at(1), thisTuple.at(2)).finished());
         std::cout << "节点" << iter.first.first << "与节点" << iter.first.second << "间的abc相短路电流: " << std::endl;
         std::cout << I << std::endl;
     }
+    */
+
+    return Isx;
 }
 
 Eigen::MatrixXcf Grid::getYx(const SEQUENCE whichSeq) const
@@ -223,4 +284,17 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
         break;
     }
     return Eigen::MatrixXcf(0, 0);
+}
+
+std::vector<std::future<lllReturnType>> Grid::lllWholeGridScan()
+{
+    std::vector<std::future<lllReturnType>> results;
+    results.resize(this->NodeNum);
+
+    auto task = [this](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return this->SymmetricShortCircuit(node, z, u); };
+
+    for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
+        results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f), 1));
+
+    return results;
 }
