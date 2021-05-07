@@ -289,11 +289,10 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
 std::vector<std::future<lllReturnType>> Grid::lllWholeGridScan()
 {
     std::vector<std::future<lllReturnType>> results;
-    results.resize(this->NodeNum);
 
     auto task = [this](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return this->SymmetricShortCircuit(node, z, u); };
 
-    for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
+    for (decltype(this->NodeNum) i = 1; i < this->NodeNum; i++)
         results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f), 1));
 
     return results;
