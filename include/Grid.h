@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2021-04-08 19:08:26
- * @LastEditTime: 2021-05-06 21:20:47
+ * @LastEditTime: 2021-05-07 14:46:16
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/Grid.h
@@ -57,4 +57,5 @@ public:
     SequenceVoltType getSequenceVolt(const Eigen::VectorXcf &If, const NodeType faultNode);
     Eigen::MatrixXf getBusVoltage(const Eigen::VectorXcf &If, const NodeType faultNode);
     SequenceCurrentType getBusCurrent(const Eigen::VectorXcf &If, const NodeType faultNode);
+    NodeType getNodeNum() const;
 };

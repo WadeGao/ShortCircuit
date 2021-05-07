@@ -1,13 +1,12 @@
 ﻿/*
  * @Author: your name
  * @Date: 2021-04-08 19:54:54
- * @LastEditTime: 2021-05-07 10:37:44
+ * @LastEditTime: 2021-05-07 15:30:11
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/ShortCircuit.cpp
  */
 
-//-lgomp -lpthread
 #define EIGEN_USE_MKL_ALL
 
 #include "Common.h"
@@ -17,6 +16,9 @@
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
+
+using namespace std;
+using namespace chrono;
 
 int main()
 {
@@ -32,26 +34,26 @@ int main()
     const auto ret = my_grid.SymmetricShortCircuit(13, cf(0.0f, 0.0f), 1);
     auto task = [&my_grid](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return my_grid.SymmetricShortCircuit(node, z, u); };
 
-    auto startTime = clock();
-    auto results = my_grid.lllWholeGridScan();
-
     size_t len = 0;
+    auto start1 = system_clock::now();
+    auto results = my_grid.lllWholeGridScan();
     for (auto &&res : results)
         len += std::get<1>(res.get()).size();
-
     std::cout << "len = " << len << std::endl;
-    printf("time: %lfs\n", (double)(clock() - startTime) / CLOCKS_PER_SEC);
+    auto duration = duration_cast<microseconds>(system_clock::now() - start1);
+    cout << "用线程池花费了" << double(duration.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
 
-    startTime = clock();
     size_t ans{0};
-    for (int i = 1; i < 300; i++)
+    auto start2 = system_clock::now();
+    for (int i = 1; i <= my_grid.getNodeNum(); i++)
     {
         const auto &ret = my_grid.SymmetricShortCircuit(i, cf(0.0f, 0.0f), 1);
         const auto &I_list = std::get<1>(ret);
         ans += I_list.size();
     }
+    auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
     std::cout << "ans = " << ans << std::endl;
-    printf("time: %lfs\n", (double)(clock() - startTime) / CLOCKS_PER_SEC);
+    cout << "花费了" << double(duration2.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
 
     /*for (auto &&result : results)
     {

@@ -42,7 +42,6 @@ Grid::~Grid()
 
 void Grid::wrapper(const TripVecType &triList, std::map<socketType, cf> &sockMap)
 {
-    //#pragma omp parallel for
     for (decltype(triList.size()) i = 0; i < triList.size(); i++)
     {
         const auto &thisTriplet = triList.at(i);
@@ -292,8 +291,10 @@ std::vector<std::future<lllReturnType>> Grid::lllWholeGridScan()
 
     auto task = [this](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return this->SymmetricShortCircuit(node, z, u); };
 
-    for (decltype(this->NodeNum) i = 1; i < this->NodeNum; i++)
+    for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
         results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f), 1));
 
     return results;
 }
+
+NodeType Grid::getNodeNum() const { return this->NodeNum; }
