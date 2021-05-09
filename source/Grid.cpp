@@ -34,7 +34,7 @@ Grid::Grid(const NodeType node_, const TripVecType &lineData, const TripVecType 
     solver.compute(this->Y1);
     //这里，通过大量的对比试验。证明密集矩阵的inverse()方法不精确
     //下面的语句是精确的求逆方法。
-    this->Z2 = this->Z1 = solver.solve(E);
+    this->Z0 = this->Z2 = this->Z1 = solver.solve(E);
 }
 
 Grid::~Grid()
@@ -81,7 +81,7 @@ lllReturnType Grid::SymmetricShortCircuit(const NodeType shortPoint, const cf &Z
 }
 
 //单相短路计算
-void Grid::lgShortCircuit(const NodeType faultNode, const cf &Zf)
+cf Grid::lgShortCircuit(const NodeType faultNode, const cf &Zf)
 {
     const auto faultNode2 = faultNode, faultNode0 = faultNode;
 
@@ -92,18 +92,19 @@ void Grid::lgShortCircuit(const NodeType faultNode, const cf &Zf)
     If << Ifa1, Ifa1, Ifa1;
     const Eigen::VectorXcf If_abc = St * If;
 
-    fprintf(stdout, "故障点abc相短路电流: \n");
+    /*fprintf(stdout, "故障点abc相短路电流: \n");
     for (decltype(If_abc.size()) i = 0; i < If_abc.size(); i++)
-        fprintf(stdout, "%f\n", abs(If_abc(i)));
+        fprintf(stdout, "%f\n", abs(If_abc(i)));*/
 
     const auto Is = If_abc(0);
-    std::cout << "故障电流: " << Is << std::endl;
+    //std::cout << "故障电流: " << Is << std::endl;
 
+    return Is;
     //this->getBusVoltageAndCurrent(If, faultNode);
 }
 
 //两相短路计算
-void Grid::llShortCircuit(const NodeType faultNode, const cf &Zf)
+cf Grid::llShortCircuit(const NodeType faultNode, const cf &Zf)
 {
     const auto faultNode2 = faultNode;
 
@@ -113,18 +114,18 @@ void Grid::llShortCircuit(const NodeType faultNode, const cf &Zf)
     If << Ifa1, Ifa2, Ifa0;
     const Eigen::VectorXcf If_abc = St * If;
 
-    fprintf(stdout, "故障点abc相短路电流: \n");
+    /*fprintf(stdout, "故障点abc相短路电流: \n");
     for (decltype(If_abc.size()) i = 0; i < If_abc.size(); i++)
-        fprintf(stdout, "%f\n", abs(If_abc(i)));
+        fprintf(stdout, "%f\n", abs(If_abc(i)));*/
 
     const auto Is = If_abc(2);
-    std::cout << "故障电流: " << Is << std::endl;
-
+    //std::cout << "故障电流: " << Is << std::endl;
+    return Is;
     //this->getBusVoltageAndCurrent(If, faultNode);
 }
 
 //两相对地短路计算
-void Grid::llgShortCircuit(const NodeType faultNode, const cf &Zf)
+cf Grid::llgShortCircuit(const NodeType faultNode, const cf &Zf)
 {
     const auto faultNode2 = faultNode, faultNode0 = faultNode;
 
@@ -136,13 +137,13 @@ void Grid::llgShortCircuit(const NodeType faultNode, const cf &Zf)
     If << Ifa1, Ifa2, Ifa0;
     const Eigen::VectorXcf If_abc = St * If;
 
-    fprintf(stdout, "故障点abc相短路电流: \n");
+    /*fprintf(stdout, "故障点abc相短路电流: \n");
     for (int i = 0; i < If_abc.size(); i++)
-        fprintf(stdout, "%f\n", abs(If_abc(i)));
+        fprintf(stdout, "%f\n", abs(If_abc(i)));*/
 
     const auto Is = If_abc(1) + If_abc(2);
-    std::cout << "故障电流: " << Is << std::endl;
-
+    //std::cout << "故障电流: " << Is << std::endl;
+    return Is;
     //this->getBusVoltageAndCurrent(If, faultNode);
 }
 
@@ -286,17 +287,51 @@ Eigen::MatrixXcf Grid::getZx(const SEQUENCE whichSeq) const
     return Eigen::MatrixXcf(0, 0);
 }
 
-std::vector<std::future<lllReturnType>> Grid::lllWholeGridScan()
+std::list<std::future<lllReturnType>> Grid::lllWholeGridScan()
 {
-    std::vector<std::future<lllReturnType>> results;
+    std::list<std::future<lllReturnType>> results;
 
-    auto task = [this](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return this->SymmetricShortCircuit(node, z, u); };
-
-    for (int a = 0; a <=  this->getNodeNum(); a++)
+    auto task = [this](const NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return this->SymmetricShortCircuit(node, z, u); };
+    for (int a = 1; a <= this->getNodeNum(); a++)
         for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
             results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f), 1));
 
     return results;
 }
 
+std::list<std::future<cf>> Grid::llgWholeGridScan()
+{
+    std::list<std::future<cf>> results;
+
+    auto task = [this](const NodeType node, const cf &z) -> cf { return this->llgShortCircuit(node, z); };
+    for (int a = 1; a <= this->getNodeNum(); a++)
+        for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
+            results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f)));
+
+    return results;
+}
+
+std::list<std::future<cf>> Grid::llWholeGridScan()
+{
+    std::list<std::future<cf>> results;
+
+    auto task = [this](const NodeType node, const cf &z) -> cf { return this->llShortCircuit(node, z); };
+    for (int a = 1; a <= this->getNodeNum(); a++)
+        for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
+            results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f)));
+
+    return results;
+}
+
+std::list<std::future<cf>> Grid::lgWholeGridScan()
+{
+    std::list<std::future<cf>> results;
+
+    auto task = [this](const NodeType node, const cf &z) -> cf { return this->lgShortCircuit(node, z); };
+    for (int a = 1; a <= this->getNodeNum(); a++)
+        for (decltype(this->NodeNum) i = 1; i <= this->NodeNum; i++)
+            results.emplace_back(this->myPool.enqueue(task, i, cf(0.0f, 0.0f)));
+
+    return results;
+}
 NodeType Grid::getNodeNum() const { return this->NodeNum; }

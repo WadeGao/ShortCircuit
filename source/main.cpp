@@ -1,7 +1,7 @@
 ﻿/*
  * @Author: your name
  * @Date: 2021-04-08 19:54:54
- * @LastEditTime: 2021-05-09 10:38:23
+ * @LastEditTime: 2021-05-09 21:23:32
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/ShortCircuit.cpp
@@ -29,33 +29,106 @@ int main()
 
     Grid my_grid(500, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
 
-    const auto ret = my_grid.SymmetricShortCircuit(13, cf(0.0f, 0.0f), 1);
-    auto task = [&my_grid](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return my_grid.SymmetricShortCircuit(node, z, u); };
-
-    size_t len = 0;
-    auto start1 = system_clock::now();
-    auto results = my_grid.lllWholeGridScan();
-    for (auto &&res : results)
-        len += std::get<1>(res.get()).size();
-    std::cout << "len = " << len << std::endl;
-    auto duration = duration_cast<microseconds>(system_clock::now() - start1);
-    cout << "用线程池花费了" << double(duration.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
-
-    size_t ans{0};
-    auto start2 = system_clock::now();
-    for (int a = 0; a <= my_grid.getNodeNum(); a++)
     {
-        for (int i = 1; i <= my_grid.getNodeNum(); i++)
-        {
-            const auto &ret = my_grid.SymmetricShortCircuit(i, cf(0.0f, 0.0f), 1);
-            const auto &I_list = std::get<1>(ret);
-            ans += I_list.size();
-        }
-    }
-    auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
-    std::cout << "ans = " << ans << std::endl;
-    cout << "花费了" << double(duration2.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+        std::cout << "******************** lll ********************" << std::endl;
+        auto task = [&my_grid](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return my_grid.SymmetricShortCircuit(node, z, u); };
 
+        size_t len = 0;
+        auto start1 = system_clock::now();
+        auto results = my_grid.lllWholeGridScan();
+        for (auto &&res : results)
+            len += std::get<1>(res.get()).size();
+        std::cout << "len = " << len << std::endl;
+        auto duration = duration_cast<microseconds>(system_clock::now() - start1);
+        cout << "用线程池花费了" << double(duration.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+
+        size_t ans{0};
+        auto start2 = system_clock::now();
+        for (int a = 1; a <= my_grid.getNodeNum(); a++)
+            for (int i = 1; i <= my_grid.getNodeNum(); i++)
+            {
+                const auto &ret = my_grid.SymmetricShortCircuit(i, cf(0.0f, 0.0f), 1);
+                const auto &I_list = std::get<1>(ret);
+                ans += I_list.size();
+            }
+
+        auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
+        std::cout << "ans = " << ans << std::endl;
+        cout << "花费了" << double(duration2.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+    }
+    //benchmark_lll(my_grid);
+    {
+        std::cout << "******************** llg ********************" << std::endl;
+        auto task = [&my_grid](NodeType node, const cf &z) -> cf { return my_grid.llgShortCircuit(node, z); };
+
+        cf len{0, 0};
+        auto start1 = system_clock::now();
+        auto results = my_grid.llgWholeGridScan();
+        for (auto &&res : results)
+            len += res.get();
+        std::cout << "len = " << len << std::endl;
+        auto duration = duration_cast<microseconds>(system_clock::now() - start1);
+        cout << "用线程池花费了" << double(duration.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+
+        cf ans{0, 0};
+        auto start2 = system_clock::now();
+        for (int a = 1; a <= my_grid.getNodeNum(); a++)
+            for (int i = 1; i <= my_grid.getNodeNum(); i++)
+                ans += my_grid.llgShortCircuit(i, cf(0.0f, 0.0f));
+
+        auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
+        std::cout << "ans = " << ans << std::endl;
+        cout << "花费了" << double(duration2.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+    }
+    //benchmark_llg(my_grid);
+    {
+        std::cout << "******************** ll ********************" << std::endl;
+        auto task = [&my_grid](NodeType node, const cf &z) -> cf { return my_grid.llShortCircuit(node, z); };
+
+        cf len{0, 0};
+        auto start1 = system_clock::now();
+        auto results = my_grid.llgWholeGridScan();
+        for (auto &&res : results)
+            len += res.get();
+        std::cout << "len = " << len << std::endl;
+        auto duration = duration_cast<microseconds>(system_clock::now() - start1);
+        cout << "用线程池花费了" << double(duration.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+
+        cf ans{0, 0};
+        auto start2 = system_clock::now();
+        for (int a = 1; a <= my_grid.getNodeNum(); a++)
+            for (int i = 1; i <= my_grid.getNodeNum(); i++)
+                ans += my_grid.llShortCircuit(i, cf(0.0f, 0.0f));
+
+        auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
+        std::cout << "ans = " << ans << std::endl;
+        cout << "花费了" << double(duration2.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+    }
+    //benchmark_ll(my_grid);
+    {
+        std::cout << "******************** lg ********************" << std::endl;
+        auto task = [&my_grid](NodeType node, const cf &z) -> cf { return my_grid.lgShortCircuit(node, z); };
+
+        cf len{0, 0};
+        auto start1 = system_clock::now();
+        auto results = my_grid.lgWholeGridScan();
+        for (auto &&res : results)
+            len += res.get();
+        std::cout << "len = " << len << std::endl;
+        auto duration = duration_cast<microseconds>(system_clock::now() - start1);
+        cout << "用线程池花费了" << double(duration.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+
+        cf ans{0, 0};
+        auto start2 = system_clock::now();
+        for (int a = 1; a <= my_grid.getNodeNum(); a++)
+            for (int i = 1; i <= my_grid.getNodeNum(); i++)
+                ans += my_grid.lgShortCircuit(i, cf(0.0f, 0.0f));
+
+        auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
+        std::cout << "ans = " << ans << std::endl;
+        cout << "花费了" << double(duration2.count()) * microseconds::period::num / microseconds::period::den << "秒" << endl;
+    }
+    //benchmark_lg(my_grid);
     /*for (auto &&result : results)
     {
         auto ret = result.get();
