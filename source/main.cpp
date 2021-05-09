@@ -1,13 +1,11 @@
 ﻿/*
  * @Author: your name
  * @Date: 2021-04-08 19:54:54
- * @LastEditTime: 2021-05-07 15:30:11
+ * @LastEditTime: 2021-05-09 10:38:23
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /VSCode/ShortCircuit.cpp
  */
-
-#define EIGEN_USE_MKL_ALL
 
 #include "Common.h"
 #include "Database.h"
@@ -22,14 +20,14 @@ using namespace chrono;
 
 int main()
 {
-    DataFetcher util("wadegao.tpddns.cn", "root", "IEEE300");
+    DataFetcher util("wadegao.tpddns.cn", "root", "DataSet500");
     const auto &LineData = util.getLineTripletList();
     const auto &IdealTransformer2Data = util.getIdealTransWithTripletReactanceList();
     //const auto &Transformer2Data = util.getTransformer2List(120);
     const auto &GeneratorData = util.getGeneratorTripletList(120);
     const auto &NodeData = util.getNodeTripletList();
 
-    Grid my_grid(300, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
+    Grid my_grid(500, LineData, NodeData, IdealTransformer2Data, {}, GeneratorData);
 
     const auto ret = my_grid.SymmetricShortCircuit(13, cf(0.0f, 0.0f), 1);
     auto task = [&my_grid](NodeType node, const cf &z, const DeviceArgType u) -> lllReturnType { return my_grid.SymmetricShortCircuit(node, z, u); };
@@ -45,11 +43,14 @@ int main()
 
     size_t ans{0};
     auto start2 = system_clock::now();
-    for (int i = 1; i <= my_grid.getNodeNum(); i++)
+    for (int a = 0; a <= my_grid.getNodeNum(); a++)
     {
-        const auto &ret = my_grid.SymmetricShortCircuit(i, cf(0.0f, 0.0f), 1);
-        const auto &I_list = std::get<1>(ret);
-        ans += I_list.size();
+        for (int i = 1; i <= my_grid.getNodeNum(); i++)
+        {
+            const auto &ret = my_grid.SymmetricShortCircuit(i, cf(0.0f, 0.0f), 1);
+            const auto &I_list = std::get<1>(ret);
+            ans += I_list.size();
+        }
     }
     auto duration2 = duration_cast<microseconds>(system_clock::now() - start2);
     std::cout << "ans = " << ans << std::endl;
